@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Papers</title>
+    <style>
+        body {
+            display: flex;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        /* Hamburger Menu Styles */
+        .hamburger {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            width: 30px;
+            height: 25px;
+            cursor: pointer;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .hamburger div {
+            width: 100%;
+            height: 4px;
+            background-color: #333;
+        }
+        /* Sidebar (Left) Styles */
+        .paper-list {
+            width: 500px;
+            background-color: #f4f4f4;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+            position: fixed;
+            height: 100%;
+            left: 0;
+            top: 0;
+            transform: translateX(-100%);
+            z-index: 999;
+        }
+        .paper-list.active {
+            transform: translateX(0);
+        }
+        .paper-list h1 {
+            margin-top: 40px;
+        }
+        #paper-list {
+            list-style-type: none;
+            margin-top: 20px;
+            padding-left: 20px;
+        }
+        /* Main Content Styles */
+        .main-content {
+            margin: 0 auto;
+            display: flex;
+            width: 90%;
+            height: 100%;
+            transition: margin-left 0.3s ease;
+        }
+        .main-content.shift {
+            margin-left: 500px;
+        }
+        /* PDF Viewer Styles */
+        .pdf-container {
+            width: 60%;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .pdf-container.expanded {
+            width: 100%;
+        }
+        iframe {
+            width: 100%;
+            height: 90vh;
+            border: none;
+        }
+        /* toggle-summary Button Styles */
+        .toggle-summary {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            width: 30px;
+            height: 25px;
+            cursor: pointer;
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            transition: transform 0.3s ease, background-color 0.3s ease;
+        }
+        .toggle-summary.collapsed {
+            transform: rotate(180deg); /* Optional: you can add a rotation effect */
+        }
+        /* Summary Container Styles */
+        .summary-container {
+            width: 40%;
+            padding-left: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        .summary-container.collapsed {
+            display: none;
+        }
+        /* Header for Summary Options */
+        .summary-options {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .summary-options label {
+            margin-right: 10px;
+        }
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            .pdf-container, .summary-container {
+                width: 100%;
+            }
+            .summary-container {
+                padding-left: 0;
+            }
+            .main-content.shift {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hamburger Menu Icon -->
+    <div class="hamburger" id="hamburger">
+        <div></div>
+        <div></div>
+        <div></div>
+    </div>
+
+    <!-- Sidebar: Paper List -->
+    <div class="paper-list" id="paper-list-container">
+        <h1>Papers</h1>
+        <ul id="paper-list"></ul>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content" id="main-content">
+        <!-- PDF Viewer -->
+        <div class="pdf-container">
+            <iframe id="pdf-viewer" src="" type="application/pdf"></iframe>
+        </div>
+        <!-- Summary Toggle Button -->
+        <div class="toggle-summary" id="toggle-summary"><</div>
+        <!-- Summary Section -->
+        <div class="summary-container">
+            <div class="summary-options">
+                <label><input type="radio" name="summary-type" value="full" checked> Full Summary</label>
+                <label><input type="radio" name="summary-type" value="page"> Page Summary</label>
+            </div>
+            <div id="summary-content"></div>
+        </div>
+    </div>
+
+    <!-- Marked.js for Markdown Parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        const hamburger = document.getElementById('hamburger');
+        const paperListContainer = document.getElementById('paper-list-container');
+        const mainContent = document.getElementById('main-content');
+        const paperList = document.getElementById('paper-list');
+        const pdfViewer = document.getElementById('pdf-viewer');
+        const summaryContent = document.getElementById('summary-content');
+        const summaryOptions = document.getElementsByName('summary-type');
+        const summaryContainer = document.querySelector('.summary-container');
+        const pdfContainer = document.querySelector('.pdf-container');
+        const toggleSummaryBtn = document.getElementById('toggle-summary');
+
+        // Toggle Sidebar
+        hamburger.addEventListener('click', () => {
+            paperListContainer.classList.toggle('active');
+            mainContent.classList.toggle('shift');
+        });
+
+        // Toggle Summary Section
+        toggleSummaryBtn.addEventListener('click', () => {
+            summaryContainer.classList.toggle('collapsed');
+            pdfContainer.classList.toggle('expanded');
+            toggleSummaryBtn.classList.toggle('collapsed');
+        });
+
+        // Load papers.json from paper/papers.json
+        fetch('paper/papers.json')
+            .then(response => response.json())
+            .then(papers => displayPapers(papers))
+            .catch(error => console.error('Error loading papers:', error));
+
+        // Function to display the list of papers
+        function displayPapers(papers) {
+            papers = Object.values(papers).sort((a, b) => a.name.localeCompare(b.name));
+            for (let key in papers) {
+                const paper = papers[key];
+                const li = document.createElement('li');
+                li.textContent = paper.name;
+                li.style.cursor = 'pointer';
+                li.style.marginBottom = '10px';
+                li.onclick = () => loadPaper(paper);
+                paperList.appendChild(li);
+            }
+        }
+
+        // Function to load the paper PDF and summaries
+        function loadPaper(paper) {
+            pdfViewer.src = paper.pdf;
+            // Initially load full summary
+            fetchSummary(paper.all_summary);
+        }
+
+        // Function to fetch and display summary based on selected type
+        function fetchSummary(summaryUrl) {
+            fetch(summaryUrl)
+                .then(response => response.text())
+                .then(text => summaryContent.innerHTML = marked.parse(text))
+                .catch(error => {
+                    console.error('Error loading summary:', error);
+                    summaryContent.innerHTML = '<p>Error loading summary.</p>';
+                });
+        }
+
+        function fetchSummaryList(summaryUrlList) {
+            console.log(summaryUrlList);
+
+            // Fetch all summaries from the list
+            // Display the list of summaries
+            let summaryList = [];
+            for (let i = 0; i < summaryUrlList.length; i++) {
+                summaryList.push("");
+            }
+
+            for (let i = 0; i < summaryUrlList.length; i++) {
+                fetch(summaryUrlList[i])
+                    .then(response => response.text())
+                    .then(text => {
+                        summaryList[i] = marked.parse(text);
+                        let innerHTML = "";
+                        for (let j = 0; j < summaryList.length; j++) {
+                            innerHTML += "<h3>Page " + (j + 1) + "</h3>";
+                            innerHTML += summaryList[j];
+                            innerHTML += "<hr>";
+                        }
+                        summaryContent.innerHTML = innerHTML;
+                        console.log(i);
+                    })
+                    .catch(error => {
+                        console.error('Error loading summary:', error);
+                        summaryContent.innerHTML = '<p>Error loading summary.</p>';
+                    });
+            }
+        }
+
+        // Event listeners for summary options
+        summaryOptions.forEach(option => {
+            option.addEventListener('change', () => {
+                const selected = document.querySelector('input[name="summary-type"]:checked').value;
+                const currentPaper = getCurrentPaper();
+                if (!currentPaper) return;
+
+                if (selected === 'full') {
+                    fetchSummary(currentPaper.all_summary);
+                } else if (selected === 'page') {
+                    let summaryUrlList = [];
+                    for (let i = 0; i < currentPaper.page_num; i++) {
+                        summaryUrlList.push(currentPaper.summaries_folder + "/" + i + "_summary.md");
+                    }
+                    fetchSummaryList(summaryUrlList);
+                }
+            });
+        });
+
+        // Helper function to get the currently loaded paper
+        function getCurrentPaper() {
+            const currentSrc = pdfViewer.src;
+            // You need to map the currentSrc back to the paper object
+            // This requires storing the current paper globally
+            return window.currentPaper || null;
+        }
+
+        // Modify loadPaper to store the current paper globally
+        function loadPaper(paper) {
+            window.currentPaper = paper;
+            pdfViewer.src = paper.pdf;
+            // Load summary based on selected option
+            const selected = document.querySelector('input[name="summary-type"]:checked').value;
+            if (selected === 'full') {
+                fetchSummary(paper.all_summary);
+            } else if (selected === 'page') {
+                let summaryUrlList = [];
+                for (let i = 0; i < paper.page_num; i++) {
+                    summaryUrlList.push(paper.summaries_folder + "/" + i + "_summary.md");
+                }
+                fetchSummaryList(summaryUrlList);
+            }
+        }
+    </script>
+</body>
+</html>

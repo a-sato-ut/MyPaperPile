@@ -1,0 +1,6 @@
+PyPDF2
+openai
+pandas
+numpy
+networkx
+matplotlib

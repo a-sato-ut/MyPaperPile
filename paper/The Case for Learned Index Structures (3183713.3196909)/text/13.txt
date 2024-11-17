@@ -1,0 +1,138 @@
+[62]N. Shazeer, A. Mirhoseini, K. Maziarz, A. Davis, Q. Le, G. Hinton, and
+J. Dean. Outrageously large neural networks: The sparsely-gated mixture-
+of-experts layer. arXiv preprint arXiv:1701.06538, 2017.
+[63]M.StonebrakerandL.A.Rowe. TheDesignofPOSTGRES. In SIGMOD,
+pages 340–355, 1986.
+[64]I. Sutskever, O. Vinyals, and Q. V. Le. Sequence to sequence learning with
+neural networks. In NIPS, pages 3104–3112, 2014.
+[65]F. Tramèr, A. Kurakin, N. Papernot, D. Boneh, and P. McDaniel. Ensemble
+adversarialtraining:Attacksanddefenses. arXivpreprintarXiv:1705.07204,
+2017.
+[66]M.TurcanikandM.Javurek. Hashfunctiongenerationbyneuralnetwork.
+InNTSP, pages 1–5, Oct 2016.
+[67]J. Wang, W. Liu, S. Kumar, and S. F. Chang. Learning to hash for indexing
+big data;a survey. Proceedings of the IEEE, 104(1):34–57, Jan 2016.
+[68]J. Wang, H. T. Shen, J. Song, and J. Ji. Hashing for similarity search: A
+survey.CoRR, abs/1408.2927, 2014.
+[69]J. Wang, J. Wang, N. Yu, and S. Li. Order preserving hashing for approxi-
+mate nearest neighbor search. In MM, pages 133–142, 2013.
+[70]Y.Wu,M.Schuster,Z.Chen,Q.V.Le,M.Norouzi,W.Macherey,M.Krikun,
+Y. Cao, Q. Gao, K. Macherey, et al. Google’s neural machine translation
+system: Bridging the gap between human and machine translation. arXiv
+preprint arXiv:1609.08144, 2016.
+[71]S. You, D. Ding, K. Canini, J. Pfeifer, and M. Gupta. Deep lattice networks
+and partial monotonic functions. In NIPS, pages 2985–2993, 2017.
+[72]Y. You, Z. Zhang, C. Hsieh, J. Demmel, and K. Keutzer. Imagenet training
+in minutes. CoRR, abs/1709.05011, 2017.
+[73]J. Yu and M. Sarwat. Two Birds, One Stone: A Fast, Yet Lightweight,
+Indexing Scheme for Modern Database Systems. In VLDB, pages 385–396,
+2016.
+[74]E. Zamanian, C. Binnig, T. Kraska, and T. Harris. The end of a myth:
+Distributed transaction can scale. PVLDB, 10(6):685–696, 2017.
+[75]H. Zhang, D. G. Andersen, A. Pavlo, M. Kaminsky, L. Ma, and R. Shen.
+Reducing the storage overhead of main-memory OLTP databases with
+hybrid indexes. In SIGMOD, pages 1567–1581, 2016.
+A THEORETICAL ANALYSIS OF SCALING
+LEARNED RANGE INDEXES
+One advantage of framing learned range indexes as modeling
+the cumulative distribution function (CDF) of the data is that
+wecan buildon thelongresearch literatureon modelingthe
+CDF.Significantresearchhasstudiedtherelationshipbetween
+a theoretical CDF F(x) and the empirical CDF of data sampled
+fromF(x).Weconsiderthecasewherewehavesampledi.i.d. N
+datapoints, Y, from some distribution, and we will use ˆFN(x)
+to denote the empirical cumulative distribution function:
+ˆFN(x)=/summationtext
+y∈Y1y≤x
+N. (2)
+Onetheoreticalquestionaboutlearnedindexesis:howwell
+do they scale with the size of the data N? In our setting, we
+learna model F(x)toapproximatethe distributionof ourdata
+ˆFN(x). Here, we assume we know the distribution F(x) that
+generated the data and analyze the error inherent in the data
+beingsampledfromthatdistribution6.Thatis,weconsiderthe
+error between the distribution of data ˆFN(x) and our model
+ofthedistribution F(x).Because ˆFN(x)isabinomialrandom
+variable with mean F(x), we find that the expected squared
+error between our data and our model is given by
+E/bracketleftbigg/parenleftBig
+F(x)−ˆFN(x)/parenrightBig2/bracketrightbigg
+=F(x)(1−F(x))
+N. (3)
+In our application the look-up time scales with the average
+error in the number of positions in the sorted data; that is, we
+6LearningF(x)canimproveorworsentheerror,butwetakethisasareasonable
+assumption for some applications, such as data keyed by a random hash.  	 	  
+	
+   
+  
+	
+   
+  
+	
+   
+  
+	
+   
+  
+	
+   
+  
+	
+   
+  
+	
+   
+  
+	
+   
+  
+	
+   
+    
+ 
+  
+ 
+ 
+ 
+  
+
+
+Figure 11: Model vs Random Hash-map
+areconcernedwiththeerrorbetweenourmodel NF(x)andthe
+key position NˆFN(x). With some minor manipulation of Eq.
+(3),wefindthattheaverageerrorinthepredictedpositions
+grows at a rate of O(√
+N). Note that this sub-linear scaling
+in error for a constant-sized model is an improvement over
+the linear scaling achieved by a constant-sized B-Tree. This
+providespreliminaryunderstandingofthescalabilityofour
+approachanddemonstrateshowframingindexingaslearning
+the CDF lends itself well to theoretical analysis.
+B SEPARATED CHAINING HASH-MAP
+We evaluated the potential of learned hash functions using a
+separatechainingHash-map;recordsarestoreddirectlywithinanarrayandonlyinthecaseofaconflictistherecordattached
+tothelinked-list.Thatiswithoutaconflictthereisatmostonecachemiss.Onlyinthecasethatseveralkeysmaptothesameposition,additionalcache-missesmightoccur.Wechoosethat
+design as it leads to the best look-up performance even forlarger payloads. For example, we also tested a commercial-
+grade dense Hash-map with a bucket-based in-place overflow
+(i.e.,theHash-mapisdividedintobucketstominimizeover-
+head and uses in-place overflow if a bucket is full [ 2]). While
+it is possible to achieve a lower footprint using this technique,
+we found that it is also twice as slow as the separate chaining
+approach.Furthermore,at80%ormorememoryutilizationthe
+dense Hash-maps degrade further in performance. Of course
+manyfurther(orthogonal)optimizationsarepossibleandby
+nomeansdoweclaimthatthisisthemostmemoryorCPU
+efficient implementation of a Hash-map. Rather we aim to
+demonstrate the general potential of learned hash functions.
+As the baseline for this experiment we used our Hash-map
+implementation with a MurmurHash3-like hash-function. As
+thedataweusedthethreeintegerdatasetsfromSection3.7
+andasthemodel-basedHash-mapthe2-stageRMImodelwith
+100kmodelsonthe2ndstageandnohiddenlayersfromthe
+same section. For all experiments we varied the number of
+available slots from 75% to 125% of the data. That is, with 75%
+there are 25% less slots in the Hash-map than data records.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+502

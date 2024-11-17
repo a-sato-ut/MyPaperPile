@@ -1,0 +1,106 @@
+IIIIII.PEFM
+:FT#MPPN
+੗MUFS/P
+,FZ
+:FTLFZLFZ LFZ LFZ LFZ LFZ
+.PEFM .PEFM .PEFM III	B
+ 5SBEJUJPOBM#MPPN'JMUFS*OTFSUJPO 	C
+ -FBSOFE#MPPN'JMUFS*OTFSUJPO 	D
+ #MPPN੗MUFSTBTBDMBTTJ੗DBUJPOQSPCMFN
+Figure 9: Bloom filters Architectures
+Yet,ifthereissomestructuretodeterminewhatisinside
+versusoutsidetheset,whichcanbelearned,itmightbepossi-
+bletoconstructmoreefficientrepresentations.Interestingly,
+for existence indexes for database systems, the latency and
+spacerequirementsareusuallyquitedifferentthanwhatwe
+saw before. Given the high latency to access cold storage (e.g.,
+disk or even band), we can afford more complex models while
+the main objective is to minimize the space for the index and
+thenumber offalsepositives.We outlinetwopotentialways
+to build existence indexes using learned models.
+5.1 Learned Bloom filters
+Whilebothrangeandpointindexeslearnthedistributionof
+keys,existenceindexesneedtolearnafunctionthatseparates
+keys from everything else. Stated differently, a good hashfunction for a point index is one with few collisions among
+keys,whereasagoodhashfunctionforaBloomfilterwouldbeonethathaslotsofcollisionsamongkeysandlotsofcollisions
+among non-keys, but few collisions of keys and non-keys. We
+consider below how to learn such a function fand how to
+incorporate it into an existence index.
+WhiletraditionalBloomfiltersguaranteeafalsenegative
+rate(FNR)ofzeroandaspecificfalsepositiverate(FPR)forany
+setofquerieschosena-priori[ 22],wefollowthenotionthatwe
+wanttoprovideaspecificFPRfor realisticqueries inparticular
+while maintaining a FNR of zero. That is, we measure the FPR
+over a heldout dataset of queries, as is common in evaluating
+MLsystems[ 30].Whilethesedefinitionsdiffer,webelievethe
+assumption that we can observe the distribution of queries,
+e.g.,fromhistoricallogs,holdsinmanyapplications,especially
+within databases5.
+Traditionally,existenceindexesmakenouseofthedistri-
+butionofkeysnorhowtheydifferfromnon-keys,butlearned
+Bloom filters can. For example, if our database included all in-
+tegersxfor0≤x<n,theexistenceindexcouldbecomputed
+inconstanttimeandwithalmostnomemoryfootprintbyjust
+computing f(x)≡1[0≤x<n].
+In considering the data distribution for ML purposes, we
+must consider a dataset of non-keys. In this work, we con-
+siderthecasewherenon-keyscomefromobservablehistori-
+cal queries and we assume that future queries come from the
+same distribution as historical queries. When this assumption
+doesnothold,onecoulduserandomlygeneratedkeys,non-
+keysgeneratedbyamachinelearningmodel[ 34],importance
+5We would like to thank MichaelMitzenmacher for valuable conversations in
+articulating the relationship between these definitions as well as improving the
+overall chapter through his insightful comments.weighting to directly address covariate shift [ 18], or adversar-
+ialtrainingforrobustness[ 65];weleavethisasfuturework.
+We denote the set of keys by Kand the set of non-keys by U.
+5.1.1 Bloom filters as a Classification Problem. Onewayto
+frametheexistenceindexisasabinaryprobabilisticclassifica-
+tion task. That is, we want to learn a model fthat can predict
+ifaquery xisakeyornon-key.Forexample,forstringswe
+can train a recurrent neural network (RNN) or convolutional
+neural network (CNN) [ 37,64] withD={(xi,yi=1 )|xi∈
+K}∪{(xi,yi=0 )|xi∈U }. Because this is a binary classifi-
+cation task, our neural network has a sigmoid activation to
+produceaprobabilityandistrainedtominimizethelogloss:
+L=/summationtext
+(x,y)∈Dylogf(x)+(1−y)log(1−f(x)).
+Theoutputof f(x)canbeinterpretedastheprobabilitythat
+xisakeyinourdatabase.Thus,wecanturnthemodelinto
+an existence index by choosing a threshold τabove which we
+will assume that the key exists in our database. Unlike Bloom
+filters, our model will likely have a non-zero FPR and FNR; in
+fact, as the FPR goes down, the FNR will go up. In order to
+preservethenofalsenegativesconstraintofexistenceindexes,
+we create an overflow Bloom filter. That is, we consider K−τ=
+{x∈K|f(x)<τ}tobethesetoffalsenegativesfrom fand
+createaBloom filterforthissubsetof keys.Wecanthen run
+our existence index as in Figure 9(c): if f(x)≥τ, the key is
+believed to exist; otherwise, check the overflow Bloom filter.
+Onequestionishowtoset τsothatourlearnedBloomfilter
+has the desired FPR p∗. We denote the FPR of our model by
+FPRτ≡/summationtext
+x∈˜U1(f(x)>τ)
+|˜U|where˜Uisaheld-outsetofnon-keys.
+We denote the FPR of our overflow Bloom filter by FPRB. The
+overall FPR of our system therefore is FPRO=FPRτ+( 1−
+FPRτ)FPRB[53]. Forsimplicity, weset FPRτ=FPRB=p∗
+2so
+that FPR O≤p∗. We tune τto achieve this FPR on ˜U.
+Thissetupiseffectiveinthatthelearnedmodelcanbefairly
+smallrelativetothesizeofthedata.Further,becauseBloom
+filters scale with the size of key set, the overflow Bloom filter
+willscalewiththeFNR.Wewillseeexperimentallythatthis
+combinationiseffectiveindecreasingthememoryfootprint
+of the existence index. Finally, the learned model computa-
+tion can benefit from machine learning accelerators, whereas
+traditionalBloomfilterstendtobeheavilydependentonthe
+random access latency of the memory system.
+5.1.2 Bloom filters with Model-Hashes. Analternativeap-
+proachtobuildingexistenceindexesistolearnahashfunction
+withthe goaltomaximize collisionsamongkeysand among
+non-keyswhileminimizingcollisionsofkeysandnon-keys.
+Interestingly, we can use the same probabilistic classification
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+498

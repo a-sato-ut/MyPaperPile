@@ -1,0 +1,106 @@
+	
+'$&' &"" $)&"+) #+* )$%. '#+% &"" $)("+& $"# )$). &+*% &"" $)&"+( #+* )$#.
+$($% $"" $))"+( #)$ ($". $'+) $"" $)&"+' #)# ($&. $&+$ $"" $)&"+( #(+ (#).
+#%## #"" $('#"" #%& '"*. #$+* #"" $("#"" #%$ '"*. #$&( #"" $(%#"" #%# '"".
+('( "'" $()"++ ##& &$). ( &+ "'" $(("+* ##& &$+. ($% "'" $)#"+) ##) &%$.
+%$* "$' $*("+% #"# %'%. % $' "$' $+#"*+ #"" %&%. %## "$' $+%"+" #"# %&'.
+$	#" "#' ""# +*$)" %# %#(. "#' ""# $$$##) $+ #%#. "#' ""# #)*#&) $( #&(.
+")( ""( *'%## %+ &'+. ") ( ""( #($#(" %( $$$. ")( ""( #($#($ %' $#(.
+#'% "#$ *$%$# &# '"$. #' % "#$ #&&#*# %+ $(+. #'% "#$ #'$#)% %( $%).
+%"' "$% *(%"* '" '*#. %" ' "$& #$($") &# %$'. %"' "$& #&(#)+ &" $)(.		
+				 
+		 			
+         
+		
+	'#$
+$	'"
+$	#""
+$	$""
+
+	%$
+	(&
+	#$*
+	$'(
+Figure 4: Learned Index vs B-Tree
+contains very complex time patterns caused by class sched-
+ules, weekends, holidays, lunch-breaks, department events,
+semester breaks, etc., which are notoriously hard to learn. For
+the maps dataset we indexed the longitude of ≈200M user-
+maintainedfeatures(e.g.,roads,museums,coffeeshops)across
+the world. Unsurprisingly, the longitude of locations is rela-
+tively linear and has fewer irregularities than the Weblogs
+dataset. Finally, to test how the index works on heavy-tail dis-
+tributions,wegeneratedasyntheticdatasetof190Munique
+values sampled from a log-normal distribution with μ=0
+andσ= 2. The values are scaled up to be integers up to 1B.
+Thisdataisofcoursehighlynon-linear,makingtheCDFmore
+difficult to learn using neural nets. For all B-Tree experiments
+we used 64-bit keys and 64-bit payload/value.
+Asourbaseline,weusedaproductionqualityB-Treeimple-
+mentationwhichissimilartothestx::btreebutwithfurther
+cache-lineoptimization,densepages(i.e.,fillfactorof100%),
+andverycompetitiveperformance.Totunethe2-stagelearnedindexesweusedsimplegrid-searchoverneuralnetswithzero
+to two hidden layers and layer-width ranging from 4 to 32
+nodes.Ingeneralwefoundthatasimple(0hiddenlayers)to
+semi-complex(2hiddenlayersand8-or16-wide)modelsfor
+the first stage work the best. For the second stage, simple, lin-
+earmodels,hadthebestperformance.Thisisnotsurprisingas
+for the last mile it is often not worthwhile to execute complex
+models, and linear models can be learned optimally.
+Learned Index vs B-Tree performance: The main re-
+sultsareshowninFigure4.Note,thatthepagesizeforB-Trees
+indicates the number of keys per page not the size in Bytes,
+whichisactuallylarger.Asthemainmetricsweshowthesize
+inMB,thetotallook-uptimeinnano-seconds,andthetimetoexecutionthemodel(eitherB-TreetraversalorMLmodel)also
+in nano-seconds and as a percentage compared to the total
+timeinparanthesis.Furthermore,weshowthespeedupand
+spacesavingscomparedtoaB-Treewithpagesizeof128in
+parenthesis as part of the size and lookup column. We choose
+a page size of 128 as the fixed reference point as it providesthe best lookup performance for B-Trees (note, that it is al-
+wayseasytosavespaceattheexpenseoflookupperformance
+bysimplyhavingnoindexatall).Thecolor-encodinginthe
+speedupandsizecolumnsindicateshowmuchfasterorslower
+(larger or smaller) the index is against the reference point.
+As can be seen, the learned index dominates the B-Tree
+index in almost all configurations by being up to 1 .5−3×faster whilebeingup to twoorders-of-magnitude smaller. Of
+course, B-Trees can be further compressed at the cost of CPU-
+timefordecompressing.However,mostoftheseoptimizations
+are orthogonal and apply equally (if not more) to neural nets.
+For example, neural nets can be compressed by using 4- or8-bit integers instead of 32- or 64-bit floating point valuesto represent the model parameters (a process referred to as
+quantization). Thislevelofcompressioncanunlockadditional
+gains for learned indexes.
+Unsurprisinglythesecondstagesizehasasignificantim-
+pact on the index size and look-up performance. Using 10,000
+or more models in the second stage is particularly impressive
+withrespecttotheanalysisin§2.1,asitdemonstratesthatour
+first-stagemodelcanmakeamuchlargerjumpinprecision
+than a single node in the B-Tree. Finally, we do not report on
+hybrid modelsor othersearch techniquesthan binary search
+for these datasets as they did not provide significant benefit.
+Learned Index vs Alternative Baselines: In addition to
+the detailed evaluation of learned indexes against our read-
+optimized B-Trees, we also compared learned indexes against
+other alternative baselines, including third party implementa-
+tions. In the following, we discuss some alternative baselines
+and compare them against learned indexes if appropriate:
+Histogram :B-TreesapproximatetheCDFoftheunderlying
+data distribution. An obvious question is whether histograms
+can be used as a CDF model. In principle the answer is yes,but to enable fast data access, the histogram must be a low-
+errorapproximationoftheCDF.Typicallythisrequiresalarge
+number of buckets, which makes it expensive to search thehistogram itself. This is especially true, if the buckets have
+varying bucket boundaries to efficiently handle data skew,
+so that only few buckets are empty or too full. The obvious
+solutions to thisissues would yield aB-Tree,and histograms
+are therefore not further discussed.
+Lookup-Table : A simple alternative to B-Trees are (hierar-
+chical) lookup-tables. Often lookup-tables have a fixed sizeand structure (e.g., 64 slots for which each slot points to an-
+other 64 slots, etc.). The advantage of lookup-tables is that
+because of their fixed size they can be highly optimized using
+AVXinstructions.Weincludedacomparisonagainsta3-stage
+lookuptable,whichisconstructedbytakingevery64thkey
+and putting it into an array including padding to make it a
+multipleof64.Thenwerepeatthatprocessonemoretimeover
+the array without padding, creating two arrays in total. To
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+495

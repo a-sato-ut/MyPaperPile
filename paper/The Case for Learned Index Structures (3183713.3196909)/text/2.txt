@@ -1,0 +1,106 @@
+look-ups and are particularly good at taking advantage of
+the cache. Also, B-Trees can map keys to pages which are
+not continuously mapped to memory or disk. All of these are
+interestingchallenges/researchquestionsandareexplained
+inmoredetail,togetherwithpotentialsolutions,throughout
+this section and in the appendix.
+At the same time, using other typesof models as indexes
+can provide tremendous benefits. Most importantly, it has
+the potential to transform the logncost of a B-Tree look-
+upintoaconstantoperation.Forexample,assumeadataset
+with 1M unique keys with a value from 1M and 2M (so the
+value 1,000,009 is stored at position 10). In this case, a simple
+linear model, which consists of a single multiplication andaddition, can perfectly predict the position of any key for a
+point look-up or range scan, whereas a B-Tree would require
+lognoperations.Thebeautyofmachinelearning,especially
+neural nets, is that they are able to learn a wide variety of
+datadistributions,mixturesandotherdatapeculiaritiesand
+patterns. The challenge is to balance the complexity of the
+model with its accuracy.
+Formostofthediscussioninthispaper,wekeepthesimpli-
+fied assumptions of this section: we only index an in-memory
+densearraythatissortedbykey.Thismayseemrestrictive,but many modern hardware optimized B-Trees, e.g., FAST
+[44],makeexactlythesameassumptions,andtheseindexes
+arequitecommonforin-memorydatabasesystemsfortheir
+superior performance [ 44,48] over scanning or binary search.
+However,whilesomeofourtechniquestranslatewelltosome
+scenarios(e.g.,disk-residentdatawithverylargeblocks,for
+example, as used in Bigtable [ 23]), for other scenarios (fine
+grainedpaging,insert-heavyworkloads,etc.)moreresearchis
+needed. In Appendix D.2 we discuss some of those challenges
+and potential solutions in more detail.
+2.1 What Model Complexity Can We
+Afford?
+To better understand the model complexity, it is important to
+know how many operations can be performed in the same
+amountoftimeittakestotraverseaB-Tree,andwhatprecision
+the model needs to achieve to be more efficient than a B-Tree.
+ConsideraB-Treethatindexes100Mrecordswithapage-
+size of 100. We can think of every B-Tree node as a way to
+partition the space, decreasing the “error” and narrowing the
+region to find the data. We therefore say that the B-Tree with
+apage-sizeof100hasa precisiongain of1/100pernodeand
+weneedtotraverseintotal loд100Nnodes.Sothefirstnode
+partitionsthespacefrom100 Mto100M/100 = 1M,thesecond
+from 1Mto 1M/100 = 10kand so on, until we find the record.
+Now,traversingasingleB-Treepagewithbinarysearchtakes
+roughly 50 cycles and is notoriously hard to parallelize3.I n
+contrast,amodernCPUcando8-16SIMDoperationspercycle.
+3ThereexistSIMDoptimizedindexstructuressuchasFAST[ 44],buttheycan
+only transform control dependencies to memory dependencies. These are often
+significantlyslowerthanmultiplicationswithsimplein-cachedatadependencies
+andasourexperimentsshowSIMDoptimizedindexstructures,likeFAST,are
+not significantly faster.Thus,amodelwillbefasteraslongasithasabetterprecision
+gainthan1/100per50 ∗8 = 400arithmeticoperations.Note
+thatthiscalculationstillassumesthatallB-Treepagesarein
+the cache.A single cache-miss costs 50-100additional cycles
+and would thus allow for even more complex models.
+Additionally, machine learning accelerators are entirely
+changing the game. They allow to run much more complex
+modelsinthesameamountoftimeandoffloadcomputation
+from the CPU. For example, NVIDIA’s latest Tesla V100 GPU
+isabletoachieve120TeraFlopsoflow-precisiondeeplearn-
+ing arithmetic operations ( ≈60,000 operations per cycle).
+Assuming that the entire learned index fits into the GPU’s
+memory (we show in Section 3.7 that this is a very reasonable
+assumption), in just 30 cycles we could execute 1 million neu-
+ral net operations. Of course, the latency for transferring the
+inputandretrievingtheresultfromaGPUisstillsignificantly
+higher, but this problem is not insuperable given batching
+and/ortherecenttrendtomorecloselyintegrateCPU/GPU/T-PUs[
+4].Finally,itcanbeexpectedthatthecapabilitiesandthe
+numberoffloating/intoperationspersecondofGPUs/TPUs
+will continue to increase, whereas the progress on increasing
+the performance of executing if-statements of CPUs essen-
+tiallyhasstagnated[ 5].Regardlessofthefactthatweconsider
+GPUs/TPUs as one of the main reasons to adopt learned in-
+dexesinpractice,inthispaperwefocusonthemorelimited
+CPUstobetterstudytheimplicationsofreplacingandenhanc-
+ingindexesthroughmachinelearningwithouttheimpactof
+hardware changes.
+2.2 Range Index Models are CDF Models
+As stated in the beginning of the section, an index is a model
+that takes a key as an input and predicts the position of the
+record. Whereas for point queries the order of the records
+does not matter, for range queries the data has to be sorted
+according to the look-up key so that all data items in a range
+(e.g.,inatimeframe)canbeefficientlyretrieved.Thisleadsto
+an interesting observation: a model that predicts the position
+given a key inside a sorted array effectively approximates the
+cumulative distribution function (CDF). We can model the
+CDF of the data to predict the position as:
+p=F(Key)∗N (1)
+wherepis the position estimate, F(Key) is the estimated cu-
+mulative distribution function for the data to estimate thelikelihood to observe a key smaller or equal to the look-upkey
+P(X≤Key), andNis the total number of keys (see also
+Figure 2). This observation opens up a whole new set of in-teresting directions: First, it implies that indexing literally
+requires learning a data distribution. A B-Tree “learns” the
+datadistributionbybuildingaregressiontree.Alinearregres-
+sionmodelwouldlearnthedatadistributionbyminimizing
+the(squared)errorofalinearfunction.Second,estimatingthedistributionforadatasetisawellknownproblemandlearned
+indexes can benefit from decades of research. Third, learning
+the CDF plays also a key role in optimizing other types of
+indexstructuresandpotentialalgorithmsaswewilloutline
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+491

@@ -1,0 +1,99 @@
+1PT
+,FZ
+Figure 2: Indexes as CDFs
+laterinthispaper.Fourth,thereisalonghistoryofresearch
+on how closely theoretical CDFs approximate empirical CDFs
+thatgivesafootholdtotheoreticallyunderstandthebenefits
+ofthisapproach[ 28].Wegiveahigh-leveltheoreticalanalysis
+of how well our approach scales in Appendix A.
+2.3 A First, Naïve Learned Index
+To better understand the requirements to replace B-Trees
+throughlearnedmodels,weused200Mweb-serverlogrecords
+with the goal of building a secondary index over the times-
+tamps using Tensorflow [ 9]. We trained a two-layer fully-
+connected neural network with 32 neurons per layer using
+ReLUactivationfunctions;thetimestampsaretheinputfea-
+turesandthepositionsinthesortedarrayarethelabels.After-
+wards we measured the look-up time for a randomly selected
+key(averagedoverseveralrunsdisregardingthefirstnumbers)
+with Tensorflow and Python as the front-end.
+Inthissettingweachieved ≈1250predictionspersecond,
+i.e., it takes ≈80,000 nano-seconds (ns) to execute the model
+with Tensorflow, without the search time (the time to find the
+actualrecordfromthepredictedposition).Asacomparison
+point,aB-Treetraversaloverthesamedatatakes ≈300nsand
+binary search over the entire data roughly ≈900ns. With a
+closerlook,wefindournaïveapproachislimitedinafewkey
+ways: (1) Tensorflow was designed to efficiently run larger
+models,notsmallmodels,andthus,hasasignificantinvocation
+overhead,especiallywithPythonasthefront-end.(2)B-Trees,
+or decision trees in general, are really good in overfitting the
+datawithafewoperationsastheyrecursivelydividethespace
+usingsimpleif-statements.Incontrast,othermodelscanbe
+significantlymoreefficienttoapproximatethegeneralshapeofaCDF,buthaveproblemsbeingaccurateattheindividualdata
+instance level. To see this, consider again Figure 2. The figure
+demonstrates, that from a top-level view, the CDF function
+appearsverysmoothandregular.However,ifonezoomsin
+to theindividual records, more and moreirregularities show;
+awellknownstatisticaleffect.Thusmodelslikeneuralnets,
+polynomial regression, etc. might be more CPU and spaceefficient to narrow down the position for an item from the
+entire dataset to a region of thousands, but a single neural netusuallyrequiressignificantlymorespaceandCPUtimeforthe
+“lastmile”toreducetheerrorfurtherdownfromthousands
+tohundreds.(3)B-Treesareextremelycache-andoperation-
+efficientastheykeepthetopnodesalwaysincacheandaccessotherpagesifneeded.Incontrast,standardneuralnetsrequire
+all weights to compute a prediction, which has a high cost in
+the number of multiplications.3 THE RM-INDEX
+In order to overcome the challenges and explore the potential
+ofmodelsasindexreplacementsoroptimizations,wedevel-
+oped the learning index framework (LIF), recursive-model
+indexes (RMI), and standard-error-based search strategies. Weprimarilyfocusonsimple,fully-connectedneuralnetsbecause
+oftheirsimplicityandflexibility,butwebelieveothertypes
+of models may provide additional benefits.
+3.1 The Learning Index Framework (LIF)
+TheLIFcanberegardedasanindexsynthesissystem;given
+anindexspecification,LIFgeneratesdifferentindexconfigu-
+rations,optimizesthem,andteststhemautomatically.While
+LIF can learn simple models on-the-fly (e.g., linear regression
+models), it relies on Tensorflow for more complex models
+(e.g., NN). However, it never uses Tensorflow at inference.
+Rather,givenatrainedTensorflowmodel,LIFautomatically
+extracts all weights from the model and generates efficient
+index structures in C++ based on the model specification. Our
+code-generation is particularly designed for small models and
+removesallunnecessaryoverheadandinstrumentationthat
+Tensorflowhastomanagethelargermodels.Hereweleverage
+ideasfrom[ 25],whichalreadyshowedhowtoavoidunnec-
+essaryoverheadfromtheSpark-runtime.Asaresult,weare
+abletoexecutesimplemodelsontheorderof30nano-seconds.
+However, it should be pointed out that LIF is still an experi-
+mentalframeworkandisinstrumentalizedtoquicklyevaluate
+different index configurations (e.g., ML models, page-sizes,
+search strategies, etc.), which introduces additional overhead
+in form of additional counters, virtual function calls, etc. Also
+besidesthevectorizationdonebythecompiler,wedonotmake
+useofspecialSIMDintrinisics.Whiletheseinefficienciesdo
+not matter in our evaluation as we ensure a fair compari-
+son by always using our framework, for a production setting
+or when comparing the reported performance numbers with
+otherimplementations,theseinefficienciesshouldbetaking
+into account/be avoided.
+3.2 The Recursive Model Index
+AsoutlinedinSection2.3oneofthekeychallengesofbuilding
+alternative learned models to replace B-Trees is the accuracy
+forlast-milesearch.Forexample,reducingthepredictionerror
+to the order of hundreds from 100M records using a single
+modelisoftendifficult.Atthesametime,reducingtheerror
+to10kfrom100M,e.g.,aprecisiongainof100 ∗100 = 10000to
+replace the first 2 layers of a B-Tree through a model, is much
+easiertoachieveevenwithsimplemodels.Similarly,reducing
+the error from 10k to 100 is a simpler problem as the model
+can focus only on a subset of the data.
+Basedonthatobservationandinspiredbythemixtureof
+experts work [ 62], we propose the recursive regression model
+(see Figure 3). That is, webuild a hierarchy of models, where
+ateachstagethemodeltakesthekeyasaninputandbasedon it picks another model, until the final stage predicts the
+position.Moreformally,forourmodel f(x)wherexisthekey
+andy∈[0,N) the position, we assume at stage /lscriptthere are
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+492

@@ -1,0 +1,101 @@
+costtoexecuteaneuralnetorotherMLmodelsmightactu-
+ally be negligible in the future. For instance, both Nvidia and
+Google’s TPUs are already able to perform thousands if not
+tensofthousandsofneuralnetoperationsinasinglecycle[ 3].
+Furthermore,itwasstatedthatGPUswillimprove1000 ×in
+performance by 2025, whereas Moore’s law for CPUs is essen-
+tially dead [ 5]. By replacing branch-heavy index structures
+withneuralnetworks,databasesandothersystemscanben-
+efit from these hardware trends. While we see the future of
+learnedindexstructuresonspecializedhardware,likeTPUs,
+thispaperfocusesentirelyonCPUsandsurprisinglyshows
+that we can achieve significant advantages even in this case.
+Itisimportanttonotethatwedonotarguetocompletelyre-
+placetraditionalindexstructureswithlearnedindexes.Rather,
+the main contribution of this paper is to outline and
+evaluate the potential of a novel approach to build in-dexes,whichcomplementsexistingworkand,arguably,opensupanentirelynewresearchdirectionforadecades-oldfield.
+Thisisbasedonthekeyobservationthat manydata
+structurescanbedecomposedintoalearnedmodeland
+anauxiliarystructure toprovidethesamesemanticguaran-
+tees.Thepotentialpowerofthisapproachcomesfromthefact
+thatcontinuous functions, describing the data distribu-
+tion,canbeusedtobuildmoreefficientdatastructures
+or algorithms . We empirically get very promising results
+when evaluating our approach on synthetic and real-world
+datasetsforread-onlyanalyticalworkloads.However,many
+open challenges still remain, such as how to handle write-
+heavy workloads, and we outline many possible directions
+for future work. Furthermore, we believe that we can use the
+same principle to replace other components and operations
+commonlyusedin(database)systems.Ifsuccessful,thecore
+idea of deeply embedding learned models into algorithms and
+data structures could lead to a radical departure from the way
+systems are currently developed.
+The remainder of this paper is outlined as follows: In the
+next two sections we introduce the general idea of learned
+indexesusing B-Treesas anexample.In Section 4weextend
+thisideatoHash-mapsandinSection5toBloomfilters.All
+sections contain a separate evaluation. Finally in Section 6 we
+discuss related work and conclude in Section 7.
+2 RANGE INDEX
+Range index structure, like B-Trees, are already models: given
+a key, they “predict” the location of a value within a key-
+sorted set. To see this, consider a B-Tree index in an analytics
+in-memorydatabase(i.e.,read-only)overthesortedprimary
+key columnas shown in Figure1(a).In this case, theB-Treeprovides a mapping from a look-up key to a position insidethe sorted array of records with the guarantee that the keyof the record at that position is the first key equal or higher
+than the look-up key. The data has to be sorted to allow for
+efficient range requests. This same general concept also ap-
+plies to secondary indexes where the data would be the list of
+BTreeKey
+pos
+pos - 0 pos + pagezise… …pos
+pos - min_err pos + max_er… …Model 
+(e.g., NN)(b) Learned Index (a) B-Tree Index
+Key
+Figure 1: Why B-Trees are models
+<key,record_pointer> pairswith thekeybeing theindexed
+value and the pointer a reference to the record.1
+For efficiency reasons it is common not to index every sin-
+gle key of the sorted records, rather only the key of every
+n-th record, i.e., the first key of a page. Here we only assume
+fixed-length records and logical paging over a continuous
+memoryregion,i.e.,asinglearray,notphysicalpageswhich
+arelocatedindifferentmemoryregions(physicalpagesand
+variable length records are discussed in Appendix D.2). In-
+dexingonlythefirstkeyofeverypagehelpstosignificantly
+reduce the number of keys the index has to store without any
+significant performancepenalty. Thus, theB-Tree is amodel,
+or in ML terminology, a regression tree: it maps a key to a
+position with a min- and max-error (a min-error of 0 and a
+max-error of the page-size), with a guarantee that the key
+canbefoundinthatregionifitexists.Consequently,wecan
+replace the index with other types of ML models, including
+neural nets, as long as they are also able to provide similar
+strong guarantees about the min- and max-error.
+At first sight it may seem hard to provide the same guar-
+antees with other types of ML models, but it is actually sur-prisingly simple. First, the B-Tree only provides the strong
+min-andmax-errorguaranteeoverthestoredkeys,notforall
+possiblekeys.Fornewdata,B-Treesneedtobere-balanced,
+or in machine learning terminology re-trained, to still be able
+toprovidethesameerrorguarantees.Thatis,formonotonic
+modelstheonlythingweneedtodoistoexecutethemodelfor
+everykeyandremembertheworstover-andunder-prediction
+ofapositiontocalculatethemin-andmax-error.2Second,and
+moreimportantly,thestrongerrorboundsarenotevenneeded.
+Thedatahastobesortedanywaytosupportrangerequests,
+so any error is easily corrected by a local search around theprediction(e.g.,usingexponentialsearch)andthus,evenal-
+lows for non-monotonic models. Consequently, we are ableto replace B-Trees with any other type of regression model,
+including linear regression or neural nets (see Figure 1(b)).
+Now,thereareothertechnicalchallengesthatweneedto
+addressbeforewecanreplaceB-Treeswithlearnedindexes.
+For instance, B-Trees have a bounded cost for inserts and
+1Note, that against some definitions for secondary indexes we do not consider
+the<key,record_pointer> pairs as part of the index; rather for secondary
+index the data are the <key,record_pointer> pairs. This is similar to how
+indexesareimplementedinkeyvaluestores[ 12,21]orhowB-Treesonmodern
+hardware are designed [44].
+2The model has to be monotonic to also guarantee the min- and max-error for
+look-up keys, which do not exist in the stored set.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+490

@@ -1,0 +1,106 @@
+.PEFM
+.PEFM .PEFM .PEFM
+.PEFM .PEFM .PEFM .PEFM۪
+۪4UBHF4UBHF 4UBHF
+1PTJUJPO,FZ
+Figure 3: Staged models
+M/lscriptmodels. We train the model at stage 0, f0(x)≈y. As such,
+modelkin stage/lscript, denoted by f(k)
+/lscript, is trained with loss:
+L/lscript=/summationdisplay
+(x,y)(f(⌊M/lscriptf/lscript−1(x)/N⌋)
+/lscript(x)−y)2L0=/summationdisplay
+(x,y)(f0(x)−y)2
+Note,weuseherethenotationof f/lscript−1(x)recursivelyexe-
+cutingf/lscript−1(x)=f(⌊M/lscript−1f/lscript−2(x)/N⌋)
+/lscript−1(x). In total, we iteratively
+train each stage with loss L/lscriptto build the complete model.
+One way to think about the different models is that each
+model makesa prediction with acertain error about thepo-
+sition for the keyand that the prediction is used to select the
+next model, which is responsible for a certain area of the key-
+spacetomakeabetterpredictionwithalowererror.However,
+recursive model indexes do nothave to be trees. As shown in
+Figure3itispossiblethatdifferentmodelsofonestagepick
+the same models at the stage below. Furthermore, each model
+does not necessarily cover the same amount of records like
+B-Trees do (i.e., a B-Tree with a page-size of 100 covers 100
+or less records).4Finally, depending on the used models the
+predictionsbetweenthedifferentstagescannotnecessarily
+be interpreted as positions estimates, rather should be consid-
+eredaspickinganexpertwhichhasabetterknowledgeabout
+certain keys (see also [62]).
+Thismodelarchitecturehasseveralbenefits:(1)Itseparates
+modelsizeandcomplexityfromexecutioncost.(2)Itleverages
+the fact that it is easy to learn the overall shape of the data
+distribution.(3)Iteffectivelydividesthespaceintosmallersub-ranges, like a B-Tree, to make it easier to achieve the required
+“last mile” accuracy with fewer operations. (4) There is no
+searchprocessrequiredin-betweenthestages.Forexample,
+theoutputof Model1.1 isdirectlyusedtopickthemodelinthe
+nextstage.Thisnotonlyreducesthenumberofinstructionsto
+manage the structure, but also allows representing the entire
+index as a sparse matrix-multiplication for a TPU/GPU.
+3.3 Hybrid Indexes
+Another advantage of the recursive model index is, that we
+are able to build mixtures of models. For example, whereas on
+thetop-layerasmallReLUneuralnetmightbethebestchoice
+as they are usually able to learn a wide-range of complex data
+distributions,themodelsatthebottomofthemodelhierarchymightbethousandsofsimplelinearregressionmodelsastheyare inexpensive in space and execution time. Furthermore, we
+4Note, that we currently train stage-wise and not fully end-to-end. End-to-end
+training would be even better and remains future work.canevenusetraditionalB-Treesatthebottomstageifthedata
+is particularly hard to learn.
+Forthispaper,wefocuson2typesofmodels,simpleneural
+netswithzerototwofully-connectedhiddenlayersandReLU
+activation functions and a layer width of up to 32 neuronsand B-Trees (a.k.a. decision trees). Note, that a zero hidden-layer NN is equivalent to linear regression. Given an index
+configuration,whichspecifiesthenumberofstagesandthe
+numberofmodelsperstageasanarrayofsizes,theend-to-end
+training for hybrid indexes is done as shown in Algorithm 1
+Algorithm 1: Hybrid End-To-End Training
+Input:int threshold, int stages[], NN_complexity
+Data:record data[], Model index[][]
+Result:trained index
+1M= stages.size;
+2tmp_records[][];
+3tmp_records[1][1] = all_data;
+4fori←1toMdo
+5forj←1tostaдes[i]do
+6 index[i][j] = new NN trained on tmp_records[ i][j];
+7 ifi<Mthen
+8 forr∈tmp_records[ i][j]do
+9 p= index[i][j] (r.key)/ stages[i+1];
+10 tmp_records[ i+1][p].add(r);
+11forj←1toindex[M].sizedo
+12index[M][j].calc_err(tmp_records[ M][j]);
+13ifindex[M][j].max_abs_err>threshold then
+14 index[M][j] = new B-Tree trained on tmp_records[ M][j];
+15returnindex;
+Startingfromtheentiredataset(line3),ittrainsfirstthetop-
+nodemodel.Basedonthepredictionofthistop-nodemodel,it
+then picks the model from the next stage (lines 9 and 10) and
+adds all keys which fall into that model (line 10). Finally, in
+thecaseofhybridindexes,theindexisoptimizedbyreplacing
+NNmodelswithB-Treesifabsolute min-/max-errorisabove
+a predefined threshold (lines 11-14).
+Note, that we store the standard and min- and max-error
+for every model on the last stage. That has the advantage,
+that we can individually restrict the search space based on
+theused modelfor everykey.Currently, wetune thevarious
+parameters of the model (i.e., number of stages, hidden layers
+per model, etc.) with a simple simple grid-search. However,
+manypotentialoptimizationsexists tospeedupthetraining
+process from ML auto tuning to sampling.
+Note,thathybridindexesallowustoboundtheworst
+caseperformanceoflearnedindexestotheperformanceof B-Trees.
+That is, in the case of an extremely difficult to
+learn data distribution, all models would be automatically re-
+placed by B-Trees, making it virtually an entire B-Tree.
+3.4 Search Strategies and Monotonicity
+Rangeindexesusuallyimplementan upper_bound(key)[lower_
+bound(key)]interfacetofindthepositionofthefirstkeywithin
+the sorted array that is equal or higher [lower] than the look-
+upkeytoefficientlysupportrangerequests.Forlearnedrange
+indexes we therefore have to find the first key higher [lower]
+fromthelook-upkeybasedontheprediction.Despitemany
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+493

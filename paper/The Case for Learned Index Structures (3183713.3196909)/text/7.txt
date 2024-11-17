@@ -1,0 +1,127 @@
+	
+"
+	# 
+"!
+
+	 
+ 
+ 	 
+	
+  
+ 
+	 
+ 
+
+Figure 5: Alternative Baselines
+lookupa key, weuse binarysearch onthe toptable followed
+by an AVX optimized branch-free scan [ 14] for the second
+tableandthedataitself.Thisconfigurationleadstothefastest
+lookuptimescomparedtoalternatives(e.g.,usingscanningon
+the top layer, or binary search on the 2nd array or the data).
+FAST:FAST[44]isahighlySIMDoptimizeddatastructure.
+Weusedthecodefrom[ 47]forthecomparison.However,it
+shouldbenotedthatFASTalwaysrequirestoallocatememory
+in the power of 2 to use the branch free SIMD instructions,
+which can lead to significantly larger indexes.
+Fixed-size B-Tree & interpolation search :Finally,asproposed
+inarecentblogpost[ 1]wecreatedafixed-heightB-Treewith
+interpolationsearch.TheB-Treeheightisset,sothatthetotal
+size of the tree is 1.5MB, similar to our learned model.
+Learned indexes without overhead :Forourlearnedindex
+weuseda2-stagedRMIindexwithamultivariatelinearregres-
+sion model at the top and simple linear models at the bottom.
+We used simple automatic feature engineering for the top
+model by automatically creating and selecting features in the
+form ofkey,loд(key),key2, etc. Multivariate linear regression
+is an interesting alternative to NN as it is particularly wellsuited to fit nonlinear patterns with only a few operations.
+Furthermore, we implemented the learned index outside of
+our benchmarking framework to ensure a fair comparison.
+For the comparison we used the Lognormal data with a
+payload of an eight-byte pointer. The results can be seen in
+Figure 5. As can be seen for the dataset under fair conditions,
+learned indexes provide the best overall performance while
+saving significant amount of memory. It should be noted, that
+the FAST index is big because of the alignment requirement.
+Whiletheresultsareverypromising,webynomeansclaim
+that learnedindexes will alwaysbe the best choice in terms
+of size or speed. Rather, learned indexes provide a new way
+to think about indexing and much more research is needed to
+fully understand the implications.
+3.7.2 String Datasets. Wealsocreatedasecondaryindex
+over 10M non-continuous document-ids of a large web index
+used as part of a real product at Google to test how learned
+indexes perform on strings. The results for the string-baseddocument-iddatasetareshowninFigure6,whichalsonow
+includeshybridmodels.Inaddition,weincludeourbestmodel
+in the table, which is a non-hybrid RMI model index with
+quaternary search, named “Learned QS” (bottom of the table).
+AllRMIindexes used10,000modelson the2ndstageand for
+hybrid indexes we used two thresholds, 128 and 64, as themaximum tolerated absolute error for a model before it is
+replaced with a B-Tree.
+As can be seen, the speedups for learned indexes over B-
+Trees for strings are not as prominent. Part of the reason is
+the comparably high cost of model execution, a problem that  
+
+    $
+
+     !$
+
+      !$
+
+   ! ! $
+	     $
+	  !   ! $
+% 	   !! $
+% 	     !$%	    $%	 !    !  $
+
+	 	    !$	
+
+
+
+
+Figure 6: String data: Learned Index vs B-Tree
+GPU/TPUswouldremove.Furthermore,searchingoverstrings
+is much more expensive thus higher precision often pays off;
+thereasonwhyhybridindexes,whichreplacebadperforming
+models through B-Trees, help to improve performance.
+Because of the cost of searching, the different search strate-
+giesmakeabiggerdifference.Forexample,thesearchtimefor
+aNNwith1-hiddenlayerandbiasedbinarysearchis1102 ns
+asshowninFigure6.Incontrast,ourbiasedquaternarysearch
+withthe samemodel onlytakes 658 ns, asignificantimprove-
+ment. The reason why biased search and quaternary search
+perform better is that they take the model error into account.
+4 POINT INDEX
+Nexttorangeindexes,Hash-mapsforpointlook-upsplaya
+similarlyimportantroleinDBMS.ConceptuallyHash-maps
+useahash-functiontodeterministicallymapkeystopositions
+inside an array (see Figure 7(a)). The key challenge for any
+efficient Hash-map implementation is to prevent too many
+distinctkeysfrombeingmappedtothesamepositioninside
+the Hash-map,henceforth referred toas a conflict. Forexam-
+ple,let’sassume100MrecordsandaHash-mapsizeof100M.
+For a hash-function which uniformly randomizes the keys,
+thenumberofexpectedconflictscanbederivedsimilarlyto
+thebirthdayparadoxandinexpectationwouldbearound33%
+or 33M slots. For each of these conflicts, the Hash-map archi-
+tecture needs to deal with this conflict. For example, separate
+chainingHash-maps wouldcreate alinked-list tohandlethe
+conflict (see Figure 7(a)). However, many alternatives exist
+including secondary probing, using buckets with several slots,
+up to simultaneously using more than one hash function (e.g.,
+as done by Cuckoo Hashing [57]).
+However,regardlessoftheHash-maparchitecture,conflicts
+can have a significant impact of the performance and/or stor-
+age requirement, and machine learned models might provide
+an alternative to reduce the number of conflicts. While the
+ideaoflearningmodelsasahash-functionisnotnew,exist-
+ingtechniquesdonottakeadvantageoftheunderlyingdata
+distribution. For example, the various perfect hashing tech-
+niques [26] also try to avoid conflicts but the data structure
+usedaspartofthehashfunctionsgrowwiththedatasize;a
+propertylearnedmodelsmightnothave(recall,theexample
+of indexing all keys between 1 and 100M). To our knowledge
+it has not been explored if it is possible to learn models which
+yield more efficient point indexes.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+496

@@ -1,0 +1,29 @@
+Here are the extracted references formatted according to your specified format:
+
+Kraska, T., Beutel, A., Chi, E. H., Dean, J., & Polyzotis, N.; 2018; The Case for Learned Index Structures; SIGMOD
+
+Abadi, M., Barham, P., Chen, J., Chen, Z., Davis, A., Dean, J., Devin, M., Ghemawat, G., Irving, M., Isard, M., et al.; 2016; Tensorflow: A system for large-scale machine learning; OSDI
+
+Basnet, R. B., Mukkamala, S., & Sung, A. H.; 2008; Detection of phishing attacks: A machine learning approach; Soft Computing Applications in Industry
+
+Alexiou, K., Kossmann, D., & Larson, P.-A.; 2013; Adaptive range filters for cold data: Avoiding trips to siberia; VLDB 
+
+Athanassoulis, M., & Ailamaki, A.; 2014; BF-tree: Approximate Tree Indexing; VLDB
+
+Fawcett, T.; 2006; An introduction to ROC analysis; Pattern Recognition Letters
+
+Kaczmarski, K.; 2012; B+-Tree Optimized for GPGPU; 
+
+Kim, C., Chhugani, J., Satish, N., Sedlar, E., Nguyen, A. D., Kaldewey, T., Lee, V. W., Brandt, S. A., & Dubey, P.; 2010; FAST: Fast architecture sensitive tree search on modern CPUs and GPUs; SIGMOD
+
+Cho, K., van Merrienboer, B., Gülçehre, Ç., Bahdanau, D., Bougares, F., Schwenk, H., & Bengio, Y.; 2014; Learning phrase representations using RNN encoder-decoder for statistical machine translation; EMNLP
+
+Duchi, J., Hazan, E., & Singer, Y.; 2011; Adaptive subgradient methods for online learning and stochastic optimization; Journal of Machine Learning Research
+
+Goodfellow, I., Pouget-Abadie, J., Mirza, M., Xu, B., Warde-Farley, D., Ozair, S., Courville, A., & Bengio, Y.; 2014; Generative adversarial nets; NIPS
+
+Mitzenmacher, M.; 2001; Compressed bloom filters; PODC
+
+Wang, J., Liu, W., Kumar, S., & Chang, S. F.; 2016; Learning to hash for indexing big data; Proceedings of the IEEE
+
+Zhang, H., Andersen, D. G., Pavlo, A., Kaminsky, M., Ma, L., & Shen, R.; 2016; Reducing the storage overhead of main-memory OLTP databases with hybrid indexes; SIGMOD

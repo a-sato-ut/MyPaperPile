@@ -1,0 +1,147 @@
+REFERENCES
+[1]Database architects blog: The case for b-tree index
+structures. http://databasearchitects.blogspot.de/2017/12/
+the-case-for-b-tree-index-structures.html.
+[2]Google’s sparsehash documentation. https://github.com/sparsehash/
+sparsehash/blob/master/src/sparsehash/sparse_hash_map.
+[3]An in-depth look at google’s first tensor processing unit
+(tpu). https://cloud.google.com/blog/big-data/2017/05/
+an-in-depth-look-at-googles-first-tensor-processing-unit-tpu.
+[4]Intel Xeon Phi. https://www.intel.com/content/www/us/en/products/
+processors/xeon-phi/xeon-phi-processors.html.
+[5]Moore Law is Dead but GPU will get 1000X faster
+by 2025. https://www.nextbigfuture.com/2017/06/
+moore-law-is-dead-but-gpu-will-get-1000x-faster-by-2025.html.
+[6]NVIDIANVLinkHigh-SpeedInterconnect. http://www.nvidia.com/object/
+nvlink.html.
+[7]Stanford DAWN cuckoo hashing. https://github.com/stanford-futuredata/
+index-baselines.
+[8]Trying to speed up binary search. http://databasearchitects.blogspot.com/
+2015/09/trying-to-speed-up- binary-search.html.
+[9]M.Abadi,P.Barham,J.Chen,Z.Chen,A.Davis,J.Dean,M.Devin,S.Ghe-
+mawat, G. Irving, M. Isard, et al. Tensorflow: A system for large-scale
+machine learning. In OSDI, volume 16, pages 265–283, 2016.
+[10]S. Abu-Nimeh, D. Nappa, X. Wang, and S. Nair. A comparison of machine
+learningtechniquesfor phishingdetection. In eCrime,pages60–69, 2007.
+[11]K. Alexiou, D. Kossmann, and P.-A. Larson. Adaptive range filters for cold
+data:Avoidingtripstosiberia. Proc.VLDBEndow.,6(14):1714–1725,Sept.
+2013.
+[12]M. Armbrust, A. Fox, D. A. Patterson, N. Lanham, B. Trushkowsky,
+J.Trutna,andH.Oh. SCADS:scale-independentstorageforsocialcom-
+puting applications. In CIDR, 2009.
+[13]M.AthanassoulisandA.Ailamaki. BF-tree:ApproximateTreeIndexing.
+InVLDB, pages 1881–1892, 2014.
+[14]Performance comparison: linear search vs binary
+search. https://dirtyhandscoding.wordpress.com/2017/08/25/
+performance-comparison-linear-search-vs-binary-search/.
+[15]R.B.Basnet,S.Mukkamala,andA.H.Sung. Detectionofphishingattacks:
+A machine learning approach. Soft Computing Applications in Industry,
+226:373–383, 2008.
+[16]R. Bayer. Symmetric binary b-trees: Data structure and maintenance
+algorithms. Acta Inf., 1(4):290–306, Dec. 1972.
+[17]R.BayerandE.McCreight. Organizationandmaintenanceoflargeordered
+indices. In SIGFIDET (Now SIGMOD), pages 107–141, 1970.
+[18]S. Bickel, M. Brückner, and T. Scheffer. Discriminative learning under
+covariate shift. Journal of Machine Learning Research, 10(Sep):2137–2155,
+2009.
+[19]M. Böhm, B. Schlegel, P. B. Volk, U. Fischer, D. Habich, and W. Lehner.
+Efficientin-memoryindexingwithgeneralizedprefixtrees. In BTW,pages
+227–246, 2011.
+[20]J.BoyarandK.S.Larsen. Efficientrebalancingofchromaticsearchtrees.
+Journal of Computer and System Sciences, 49(3):667 – 682, 1994. 30th IEEE
+Conference on Foundations of Computer Science.
+[21]M.Brantner,D.Florescu,D.A.Graf,D.Kossmann,andT.Kraska. Building
+a database on S3. In SIGMOD, pages 251–264, 2008.
+[22]A. Broder and M. Mitzenmacher. Network applications of bloom filters: A
+survey.Internet mathematics, 1(4):485–509, 2004.
+[23] F. Chang,J. Dean,S.Ghemawat, W.C. Hsieh,D. A.Wallach,M. Burrows,
+T.Chandra,A.Fikes,andR.Gruber. Bigtable:Adistributedstoragesystem
+for structured data (awarded best paper!). In OSDI, pages 205–218, 2006.
+[24]K. Cho, B. van Merrienboer, Ç. Gülçehre, D. Bahdanau, F. Bougares,
+H.Schwenk,andY.Bengio. Learningphraserepresentations usingRNN
+encoder-decoder for statistical machine translation. In EMNLP, pages
+1724–1734, 2014.
+[25]A.Crotty,A.Galakatos,K.Dursun,T.Kraska,C.Binnig,U.Çetintemel,and
+S.Zdonik. Anarchitectureforcompilingudf-centricworkflows. PVLDB,
+8(12):1466–1477, 2015.
+[26]M.Dietzfelbinger,A.Karlin,K.Mehlhorn,F.MeyerauFderHeide,H.Rohn-
+ert, andR. E.Tarjan. Dynamic perfecthashing:Upper andlower bounds.
+SIAM Journal on Computing, 23(4):738–761, 1994.
+[27]J.Duchi,E.Hazan,andY.Singer. Adaptivesubgradientmethodsforonlinelearningandstochasticoptimization. JournalofMachineLearningResearch,
+12(Jul):2121–2159, 2011.
+[28]A.Dvoretzky,J.Kiefer,andJ.Wolfowitz. Asymptoticminimaxcharacterofthesampledistributionfunctionandoftheclassicalmultinomialestimator.
+The Annals of Mathematical Statistics, pages 642–669, 1956.[29]B.Fan,D.G.Andersen,M.Kaminsky,andM.D.Mitzenmacher. Cuckoo
+filter: Practically better than bloom. In CoNEXT, pages 75–88, 2014.
+[30]T. Fawcett. An introduction to roc analysis. Pattern recognition letters,
+27(8):861–874, 2006.
+[31] E. Fredkin. Trie memory. Commun. ACM, 3(9):490–499, Sept. 1960.
+[32]A. Galakatos, M. Markovitch, C. Binnig, R. Fonseca, and T. Kraska. A-tree:
+A bounded approximate index structure. CoRR, abs/1801.10207, 2018.
+[33]J.Goldstein,R.Ramakrishnan,andU.Shaft. CompressingRelationsand
+Indexes. In ICDE, pages 370–379, 1998.
+[34]I.Goodfellow,J.Pouget-Abadie,M.Mirza,B.Xu,D.Warde-Farley,S.Ozair,
+A.Courville,andY.Bengio. Generativeadversarialnets. In NIPS,pages
+2672–2680, 2014.
+[35]G.Graefe. B-treeindexes,interpolationsearch,andskew. In DaMoN,2006.
+[36]G.GraefeandP.A.Larson. B-treeindexesandCPUcaches. In ICDE,pages
+349–358, 2001.
+[37]A.Graves. Generatingsequenceswithrecurrentneuralnetworks. arXiv
+preprint arXiv:1308.0850, 2013.
+[38] R. Grossi,A. Gupta,andJ. S.Vitter. High-orderentropy-compressed text
+indexes. In SODA, pages 841–850. Society for Industrial and Applied
+Mathematics, 2003.
+[39]R. Grossi and G. Ottaviano. The wavelet trie: Maintaining an indexed
+sequence of strings in compressed space. In PODS, pages 203–214, 2012.
+[40]J. Guo and J. Li. CNN based hashing for image retrieval. CoRR,
+abs/1509.01354, 2015.
+[41]M. Gupta, A. Cotter, J. Pfeifer, K. Voevodski, K. Canini, A. Mangylov,
+W.Moczydlowski,andA.VanEsbroeck. Monotoniccalibratedinterpolated
+look-uptables. TheJournalofMachineLearningResearch,17(1):3790–3836,
+2016.
+[42]J. C. Huang and B. J. Frey. Cumulative distribution networks and the
+derivative-sum-productalgorithm:Modelsandinferenceforcumulative
+distribution functions on graphs. J. Mach. Learn. Res., 12:301–348, Feb.
+2011.
+[43] K. Kaczmarski. B+-Tree Optimized for GPGPU. 2012.
+[44]C. Kim, J. Chhugani, N. Satish, E. Sedlar, A. D. Nguyen, T. Kaldewey, V. W.
+Lee,S.A.Brandt,andP.Dubey. Fast:Fastarchitecturesensitivetreesearch
+on modern cpus and gpus. In SIGMOD, pages 339–350, 2010.
+[45]T. Kissinger, B. Schlegel, D. Habich, and W. Lehner. Kiss-tree: Smart latch-
+freein-memoryindexingonmodernarchitectures. In DaMoN,pages16–23,
+2012.
+[46]T.J.LehmanandM.J.Carey. Astudyofindexstructuresformainmemory
+database management systems. In VLDB, pages 294–303, 1986.
+[47] V. Leis. FAST source. http://www-db.in.tum.de/âĹĳleis/index/fast.cpp.[48]
+V. Leis, A. Kemper, and T. Neumann. The adaptive radix tree: Artful
+indexing for main-memory databases. In ICDE, pages 38–49, 2013.
+[49]W. Litwin. Readings in database systems. chapter Linear Hashing: A New
+Tool for File and Table Addressing., pages 570–581. Morgan Kaufmann
+Publishers Inc., 1988.
+[50]M.Magdon-IsmailandA.F.Atiya. Neuralnetworksfordensityestimation.
+InM.J.Kearns,S.A.Solla,andD.A.Cohn,editors, NIPS,pages522–528.
+MIT Press, 1999.
+[51]D.J.MillerandH.S.Uyar. Amixtureofexpertsclassifierwithlearning
+based on both labelled and unlabelled data. In NIPS, pages 571–577, 1996.
+[52]M. Mitzenmacher. Compressed bloom filters. In PODC, pages 144–150,
+2001.
+[53]M.Mitzenmacher. Amodelforlearnedbloomfiltersandrelatedstructures.
+arXiv preprint arXiv:1802.00884, 2018.
+[54]G.Moerkotte. SmallMaterializedAggregates:ALightWeightIndexStruc-
+ture for Data Warehousing. In VLDB, pages 476–487, 1998.
+[55]T. Neumann and G. Weikum. RDF-3X: A RISC-style Engine for RDF. Proc.
+VLDB Endow., pages 647–659, 2008.
+[56]OpenStreetMap database ©OpenStreetMap contributors. https://aws.
+amazon.com/public-datasets/osm.
+[57]R.PaghandF.F.Rodler. Cuckoohashing. JournalofAlgorithms,51(2):122–
+144, 2004.
+[58]J. Rao and K. A. Ross. Making b+- trees cache conscious in main memory.
+InSIGMOD, pages 475–486, 2000.
+[59]S. Richter, V. Alvarez, and J. Dittrich. A seven-dimensional analysis ofhashing methods and its implications on query processing. Proc. VLDB
+Endow., 9(3):96–107, Nov. 2015.
+[60]D. G. Severance and G. M. Lohman. Differential files: Their application to
+the maintenance of large data bases. In SIGMOD, pages 43–43, 1976.
+[61]A. Shahvarani and H.-A. Jacobsen. A hybrid b+-tree as solution for in-memory indexing on cpu-gpu heterogeneous computing platforms. In
+SIGMOD, pages 1523–1538, 2016.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+501

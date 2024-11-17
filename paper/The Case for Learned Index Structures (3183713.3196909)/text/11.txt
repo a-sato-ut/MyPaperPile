@@ -1,0 +1,106 @@
+Probably most related to this paper are A-Trees [ 32], BF-
+Trees[13],andB-Treeinterpolationsearch[ 35].BF-Treesuses
+a B+-tree to store information about a region of the dataset,
+butleafnodesareBloomfiltersanddonotapproximatethe
+CDF. In contrast, A-Trees usepiece-wise linear functions to
+reducethenumberofleaf-nodesinaB-Tree,and[ 35]proposes
+to use interpolation search within a B-Tree page. However,
+learnedindexesgomuchfurtherandproposetoreplacethe
+entire index structure using learned models.
+Finally, sparse indexes like Hippo [ 73], Block Range In-
+dexes [63], and Small Materialized Aggregates (SMAs) [ 54] all
+store information about value ranges but again do not take
+advantageoftheunderlyingpropertiesofthedatadistribution.
+LearningHashFunctionsforANNIndexes: Therehas
+beenalotofresearchonlearninghashfunctions[ 49,59,67,
+68]. Most notably, there has been work on learning locality-
+sensitive hash (LSH) functions to build Approximate Nearest
+Neighborhood(ANN)indexes.Forexample,[ 40,66,68]explore
+theuseofneuralnetworksasahashfunction,whereas[ 69]
+eventriestopreservetheorderofthemulti-dimensionalinput
+space. However, the general goal of LSH is to group similar
+itemsintobucketstosupportnearestneighborhoodqueries,
+usuallyinvolvinglearningapproximatesimilaritymeasuresinhigh-dimensionalinputspaceusingsomevariantofhamming
+distances.Thereisnodirectwaytoadaptpreviousapproaches
+to learn the fundamental data structures we consider, and it is
+not clear whether they can be adapted.
+Perfect Hashing: Perfect hashing [ 26] is very related to
+ouruseofmodelsforHash-maps.LikeourCDFmodels,per-
+fecthashingtriestoavoidconflicts.However,inallapproaches
+of which we are aware, learning techniques have not been
+considered, and the size of the function grows with the sizeof the data. In contrast, learned hash functions can be inde-
+pendentofthesize.For example,alinearmodelformapping
+everyotherintegerbetween0and200Mwouldnotcreateany
+conflictsandisindependentofthesizeofthedata.Inaddition,
+perfect hashing is also not useful for B-Trees or Bloom filters.
+Bloomfilters: Finally,ourexistenceindexesdirectlybuilds
+upon the existing work in Bloom filters [ 11,29]. Yet again our
+worktakesadifferentperspectiveontheproblembyproposing
+a Bloom filter enhanced classification model or using models
+as special hash functions with a very different optimization
+goal than the hash-models we created for Hash-maps.
+SuccinctDataStructures: Thereexistsaninterestingcon-
+nection between learned indexes and succinct data structures,
+especiallyrank-selectdictionariessuchaswavelettrees[ 38,
+39].However,manysuccinctdatastructuresfocusonH0en-
+tropy(i.e.,thenumberofbitsthatarenecessarytoencodeeach
+elementintheindex),whereaslearnedindexestrytolearnthe
+underlying data distribution to predict the position of each el-
+ement.Thus,learnedindexesmightachieveahighercompres-
+sion rate than H0 entropy potentially at the cost of slower op-
+erations. Furthermore, succinct data structures normally have
+to be carefully constructed for each use case, whereas learned
+indexes “automate” this process through machine learning.Yet, succinct data structures might provide a framework to
+further study learned indexes.
+ModelingCDFs: Our models for both range and point in-
+dexes are closely tied to models of the CDF. Estimating the
+CDF is non-trivial and has been studied in the machine learn-
+ingcommunity[ 50]withafewapplicationssuchasranking
+[42].HowtomosteffectivelymodeltheCDFisstillanopen
+question worth further investigation.
+Mixture ofExperts: Our RMI architecture follows a long
+lineofresearchonbuildingexpertsforsubsetsofthedata[ 51].
+With the growth of neural networks, this has become more
+commonanddemonstratedincreasedusefulness[ 62].Aswe
+see in our setting, it nicely lets us to decouple model size and
+modelcomputation,enablingmorecomplexmodelsthatare
+not more expensive to execute.
+7 CONCLUSION AND FUTURE WORK
+Wehaveshownthatlearnedindexescanprovidesignificant
+benefits by utilizing the distribution of data being indexed.
+This opens the door to many interesting research questions.
+Other ML Models: While our focus was on linear models
+andneuralnetswithmixtureofexperts,thereexistmanyother
+MLmodeltypesandwaystocombinethemwithtraditional
+data structures, which are worth exploring.
+Multi-DimensionalIndexes: Arguablythemostexciting
+research direction for the idea of learned indexes is to extend
+themtomulti-dimensionalindexes.Models,especiallyNNs,
+are extremely good at capturing complex high-dimensional
+relationships.Ideally,thismodelwouldbeabletoestimatethe
+positionofallrecordsfilteredbyanycombinationofattributes.
+Beyond Indexing: Learned Algorithms Maybesurpris-
+ingly, a CDF model has also the potential to speed-up sorting
+andjoins,notjustindexes.Forinstance,thebasicidea tospeed-
+upsortingistouseanexistingCDFmodel Ftoputtherecords
+roughly in sorted order and then correct the nearly perfectly
+sorted data, for example, with insertion sort.
+GPU/TPUs Finally,asmentionedseveraltimesthroughout
+thispaper,GPU/TPUswillmaketheideaoflearnedindexes
+evenmorevaluable.Atthesametime,GPU/TPUsalsohave
+theirownchallenges,mostimportantlythehighinvocation
+latency. While it is reasonable to assume that probably alllearned indexes will fit on the GPU/TPU because of the ex-
+ceptionalcompressionratioasshownbefore,itstillrequires
+2-3 micro-seconds to invoke any operation on them. At thesame time, the integration of machine learning accelerators
+with the CPU is getting better [ 4,6] and with techniques like
+batching requests the cost of invocation can be amortized, so
+thatwedonotbelievetheinvocationlatencyisarealobstacle.
+In summary, we have demonstrated that machine
+learnedmodelshavethepotentialtoprovidesignificantbenefitsoverstate-of-the-artindexes,andwebelievethis
+is a fruitful direction for future research.
+Acknowledgements: WewouldliketothankMichaelMitzenmacher,
+ChrisOlston,JonathanBischofandmanyothersatGooglefortheir
+helpful feedback during the preparation of this paper.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+500

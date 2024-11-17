@@ -1,0 +1,103 @@
+Forcing less slots than the data size, minimizes the empty
+slots within the Hash-map at the expense of longer linked
+lists.Howeve r,forHash-mapswestorethefullrecords,which
+consistofa64bitkey,64bitpayload,anda32bitmeta-datafield
+for delete flags, version nb, etc. (so a record has a fixed length
+of 20 Bytes); note that our chained hash-map adds another
+32bit pointer, making it a 24Byte slot.
+TheresultsareshowninFigure11,listingtheaveragelook-
+up time, the number of empty slots in GB and the space im-
+provement as a factor of using a randomized hash function.
+Note,thatincontrasttotheB-Treeexperiments,we doinclude
+the data size. The main reason is that in order to enable 1
+cache-misslook-ups,thedataitselfhastobeincludedinthe
+Hash-map,whereasintheprevioussectionweonlycounted
+the extra index overhead excluding the sorted array itself.
+As can be seen in Figure 11, the index with the model hash
+functionoverallhassimilarperformancewhileutilizingthe
+memory better. For example, for the map dataset the model
+hash function only “wastes” 0.18GB in slots, an almost 80%
+reductioncomparedtousingarandomhashfunction.Obvi-
+ously,themomentweincreasetheHash-mapinsizetohave
+25% more slots, the savings are not as large, as the Hash-map
+is also able to better spread out the keys. Surprisingly if we
+decreasethespaceto75%ofthenumberofkeys,thelearned
+Hash-map still has an advantage because of the still prevalent
+birthday paradox.
+C HASH-MAP COMPARISON AGAINST
+ALTERNATIVE BASELINES
+InadditiontotheseparatechainingHash-maparchitecture,we
+alsocomparedlearnedpointindexesagainstfouralternative
+Hash-map architectures and configurations:
+AVX Cuckoo Hash-map: We used an AVX optimized
+Cuckoo Hash-map from [7].
+Commercial Cuckoo Hash-map: The implementation
+of[7]ishighlytuned,butdoesnothandleallcornercases.We
+therefore also compared against a commercially used Cuckoo
+Hash-map.
+In-place chained Hash-map with learned hash func-
+tions:Onesignificantdownsideofseparatechainingisthatit
+requires additionalmemoryfor the linked list.Asan alterna-
+tive, we implemented a chained Hash-map, which uses a two
+passalgorithm:inthefirstpass,thelearnedhashfunctionis
+usedtoputitemsintoslots.Ifaslotisalreadytaken,theitemis
+skipped. Afterwards we use a separate chaining approach for
+everyskippeditemexceptthatweusetheremainingfreeslots
+with offsets as pointers for them. As a result, the utilization
+canbe100%(recall,wedonotconsiderinserts)andthequality
+of the learned hash function can only make an impact on the
+performance not the size: the fewer conflicts, the fewer cache
+misses.Weusedasimplesinglestagemulti-variatemodelas
+the learned hash function and implemented the Hash-map
+including the model outside of our benchmarking framework
+to ensure a fair comparison.Type Time (ns) Utilization
+AVX Cuckoo, 32-bit value 31ns 99%
+AVX Cuckoo, 20 Byte record 43ns 99%
+Comm. Cuckoo, 20Byte record 90ns 95%
+In-place chained Hash-map
+with learned hash functions,
+record35ns 100%
+Table 1: Hash-map alternative baselines
+LikeinSectionBourrecordsare20Byteslargeandconsist
+of a 64bit key, 64bit payload, and a 32bit meta-data field ascommonly found in real applications (e.g., for delete flags,
+versionnumbers,etc.).ForallHash-maparchitectureswetried
+to maximize utilization and used records, except for the AVX
+Cuckoo Hash-map where we also measured the performance
+for32bitvalues.Asthedatasetweusedthelog-normaldata
+and the same hardware as before. The results are shown in
+Table 1.
+The results for the AVX cuckoo Hash-map show that the
+payloadhasasignificantimpactontheperformance.Going
+from8Byteto20Bytedecreasestheperformancebyalmost
+40%.Furthermore,thecommercialimplementationwhichhan-
+dlesallcornercasesbutisnotveryAVXoptimizedslowsdown
+thelookupbyanotherfactorof2.Incontrast,ourlearnedhash
+functions with in-place chaining can provide better lookup
+performance than even the cuckoo Hash-map for our records.
+The main take-aways from this experiment is that learned
+hash functions can be used with different Hash-map architec-
+turesandthatthebenefitsanddisadvantageshighlydepend
+on the implementation, data and workload.
+D FUTURE DIRECTIONS FOR LEARNED
+B-TREES
+In the main part of the paper, we have focused on index-
+structuresforread-only,in-memorydatabasesystems.Here
+weoutlinehowtheideaoflearnedindexstructurescouldbe
+extended in the future.
+D.1 Inserts and Updates
+Onfirstsight,insertsseemtobetheAchillesheeloflearnedin-dexesbecauseofthepotentiallyhighcostforlearningmodels,
+but yet again learned indexes might have a significant ad-
+vantage for certain workloads. In general we can distinguish
+between two types of inserts: (1) appendsand (2)inserts in the
+middlelike updating a secondary index on the customer-id
+over an order table.
+Let’sforthemomentfocusonthefirstcase:appends.For
+example, it is reasonable to assume that for an index over the
+timestampsofweb-logs,likeinourpreviousexperiments,most
+ifnotallinsertswillbeappendswithincreasingtimestamps.
+Now, let us further assume that our model generalizes andis able to learn the patterns, which also hold for the future
+data.Asaresult,updatingtheindexstructurebecomesan O(1)
+operation;itisasimpleappendandnochangeofthemodel
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+503

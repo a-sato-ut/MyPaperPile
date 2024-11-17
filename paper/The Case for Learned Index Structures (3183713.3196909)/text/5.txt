@@ -1,0 +1,103 @@
+efforts, it was repeatedly reported [ 8] that binary search or
+scanningforrecordswithsmallpayloadsareusuallythefastest
+strategies to find a key within a sorted array as the additional
+complexity of alternative techniques rarely pays off. However,
+learned indexes might have an advantage here: the models
+actuallypredictthepositionofthekey,notjusttheregion(i.e.,
+page)ofthekey.Herewediscusstwosimplesearchstrategies
+which take advantage of this information:
+ModelBiased Search: Our default search strategy, which
+only varies from traditional binary search in that the first
+middlepoint is set to the value predicted by the model.
+Biased Quaternary Search: Quaternary search takes in-
+stead of one split point three points with the hope that the
+hardwarepre-fetches allthreedata pointsatonce toachieve
+betterperformanceifthedataisnotincache.Inourimplemen-
+tation,wedefinedtheinitialthreemiddlepointsofquaternary
+search as pos−σ,pos,pos+σ. That is we make a guess that
+mostofourpredictionsareaccurateandfocusourattention
+first around the position estimate and then we continue with
+traditional quaternary search.
+For all our experiments we used the min- and max-error
+as the search area for all techniques. That is, we executed
+theRMImodelforeverykeyandstoredtheworstover-and
+under-predictionperlast-stagemodel.Whilethistechnique
+guarantees to find all existing keys, for non-existing keys it
+mightreturnthewrongupperorlowerboundiftheRMImodel
+is not monotonic. To overcome this problem, one option is to
+force our RMI model to be monotonic, as has been studied in
+machine learning [41, 71].
+Alternatively, for non-monotonic models we can automati-
+callyadjustthesearcharea.Thatis,ifthefoundupper(lower)boundkeyisontheboundaryofthesearchareadefinedbythe
+min- and max-error, we incrementally adjust the search area.
+Yet,anotherpossibilityis,touseexponentialsearchtechniques.
+Assuming a normal distributed error, those techniques on av-
+erage should work as good as alternative search strategies
+while not requiring to store any min- and max-errors.
+3.5 Indexing Strings
+Wehaveprimarilyfocusedonindexingrealvaluedkeys,but
+manydatabasesrelyonindexingstrings,andluckily,signif-icant machine learning research has focused on modeling
+strings.Asbefore,weneedtodesignamodelofstringsthat
+isefficientyetexpressive. Doingthiswellforstringsopensa
+number of unique challenges.
+The first design consideration is how to turn strings into
+features for themodel, typically called tokenization. Forsim-
+plicityandefficiency,weconsideran n-lengthstringtobea
+feature vector x∈Rnwhere xiis the ASCII decimal value
+(or Unicode decimal value depending on the strings). Further,
+most ML models operate more efficiently if all inputs are of
+equal size. As such, we will set a maximum input length N.
+Becausethe dataissorted lexicographically,wewill truncate
+the keys to length Nbefore tokenization. For strings with
+lengthn<N,w es e tx i= 0 fori>n.Forefficiency,wegenerallyfollowasimilarmodelingap-
+proach as we did for real valued inputs. We learn a hierarchy
+of relatively small feed-forward neural networks. The one dif-
+ferenceisthattheinputisnotasinglerealvalue xbutavector
+x. Linear models w·x+bscale the number of multiplications
+and additions linearly with the input length N. Feed-forward
+neural networks with even a single hidden layer of width h
+will scale O(hN) multiplications and additions.
+Ultimately,webelievethereissignificantfutureresearch
+thatcanoptimizelearnedindexesforstringkeys.Forexample,
+we could easily imagine other tokenization algorithms. There
+is a large body of research in natural language processing on
+stringtokenizationtobreakstringsintomoreusefulsegments
+for ML models, e.g., wordpieces in translation [ 70]. Further, it
+mightbeinterestingtocombinetheideaofsuffix-treeswith
+learned indexes as well as explore more complex model archi-
+tectures (e.g., recurrent and convolutional neural networks).
+3.6 Training
+Whilethetraining(i.e.,loading)timeisnotthefocusofthis
+paper, it should be pointed out that all of our models, shallow
+NNs or even simple linear/multi-variate regression models,train relatively fast. Whereas simple NNs can be efficientlytrained using stochastic gradient descent and can converge
+in less than one to a few passes over the randomized data,
+aclosedformsolutionexistsforlinearmulti-variatemodels
+(e.g., also 0-layer NN) and they can be trained in a single pass
+over the sorted data. Therefore, for 200M records traininga simple RMI index does not take much longer than a few
+seconds,(ofcourse,dependingonhowmuchauto-tuningis
+performed); neural nets can train on the order of minutes per
+model,dependingonthecomplexity.Alsonotethattraining
+the top model over the entire data is usually not necessary as
+thosemodelsconvergeoftenevenbeforeasinglescanoverthe
+entire randomized data. This is in part because we use simple
+modelsanddonotcaremuchaboutthelastfewdigitpoints
+in precision, as it has little effect on indexing performance.Finally, research on improving learning time from the ML
+community[ 27,72]applies inour contextandwe expecta lot
+of future research in this direction.
+3.7 Results
+Weevaluatedlearnedrangeindexesinregardtotheirspace
+andspeedonse veralrealandsyntheticdatasetsagainstother
+read-optimized index structures.
+3.7.1 Integer Datasets. As a first experiment we compared
+learnedindexesusinga2-stageRMImodelanddifferentsecond-
+stage sizes (10k, 50k, 100k, and 200k) with a read-optimized
+B-Treewithdifferentpagesizesonthreedifferentintegerdata
+sets.Forthedataweused2real-worlddatasets,(1)Weblogs
+and(2)Maps[ 56],and(3)asyntheticdataset,Lognormal.The
+Weblogsdatasetcontains200Mlogentriesforeveryrequest
+to a major university web-site over several years. We use the
+unique request timestamps as the index keys. This dataset
+is almost a worst-case scenario for the learned index as it
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+494

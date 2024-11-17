@@ -1,0 +1,101 @@
+model as before to achieve that. That is, we can create a hash
+functiond, which maps fto a bit array of size mby scaling
+itsoutputas d=⌊f(x)∗m⌋Assuch,wecanuse dasahash
+function just like any other in a Bloom filter. This has the
+advantage of fbeing trained to map most keys to the higher
+rangeofbitpositionsandnon-keystothelowerrangeofbit
+positions (see Figure9(b)). A more detailed explanation of the
+approach is given in Appendix E.
+5.2 Results
+In order to test this idea experimentally, we explore the appli-
+cationofan existenceindexforkeepingtrack ofblacklisted
+phishing URLs. We consider data from Google’s transparency
+reportasoursetofkeystokeeptrackof.Thisdatasetconsists
+of1.7MuniqueURLs.Weuseanegativesetthatisamixtureof
+random (valid) URLs and whitelisted URLs that could be mis-
+taken forphishing pages.We splitour negativeset randomly
+intotrain,validationandtest sets.Wetrainacharacter-level
+RNN(GRU[ 24],inparticular)topredictwhichsetaURLbe-
+longsto;weset τbasedonthevalidationsetandalsoreport
+the FPR on the test set.
+AnormalBloomfilterwithadesired1%FPRrequires2.04MB.
+Weconsidera16-dimensionalGRUwitha32-dimensionalem-
+bedding for each character; this model is 0.0259MB. Whenbuilding a comparable learned index, we set
+τfor 0.5% FPR
+on the validation set; this gives a FNR of 55%. (The FPR on
+thetestsetis0.4976%,validatingthechosenthreshold.)Asde-scribedabove,thesizeofourBloomfilterscaleswiththeFNR.
+Thus, we find that our model plus the spillover Bloom filter
+uses 1.31MB, a 36% reduction in size. If we want to enforce
+an overall FPR of 0.1%, we have a FNR of 76%, which brings
+thetotalBloomfiltersizedownfrom3.06MBto2.59MB,a15%
+reduction in memory. We observe this general relationship
+inFigure10.Interestingly,weseehowdifferentsizemodels
+balance the accuracy vs. memory trade-off differently.
+Weconsiderbrieflythecasewherethereiscovariateshift
+in our query distribution that we have not addressed in the
+model. When using validation and test sets with only random
+URLs we find that we can save 60% over a Bloom filter with a
+FPR of 1%. When using validation and test sets with only the
+whitelistedURLswefindthatwecansave21%overaBloom
+filterwithaFPRof1%.Ultimately,thechoiceofnegativesetis
+application specific and covariate shift could be more directly
+addressed,buttheseexperimentsareintendedtogiveintuition
+for how the approach adapts to different situations.
+Clearly, the more accurate our model is, the better the sav-
+ings in Bloom filter size. One interesting property of this is
+thatthereisnoreasonthatourmodelneedstousethesame
+features as the Bloom filter. For example, significant research
+has worked on using ML to predict if a webpage is a phish-
+ingpage[ 10,15].AdditionalfeatureslikeWHOISdataorIP
+informationcouldbeincorporatedinthemodel,improvingac-
+curacy, decreasing Bloom filter size, and keeping the property
+of no false negatives.
+Further, we give additional results following the approach
+in Section 5.1.2 in Appendix E..FNPSZ'PPUQSJOU	.FHBCZUFT
+#MPPN'JMUFS
+8&8&
+8&
+
+'BMTF1PTJUJWF3BUF	
+Figure10:LearnedBloomfilterimprovesmemoryfoot-
+printatawiderangeofFPRs.(Here WistheRNNwidth
+andEis the embedding size for each character.)
+6 RELATED WORK
+The idea of learned indexes builds upon a wide range of re-
+search in machine learning and indexing techniques. In the
+following, we highlight the most important related areas.
+B-Trees and variants: Over the last decades a variety
+of different index structures have been proposed [ 36], such
+as B+-trees [ 17] for disk based systems and T-trees [ 46]o r
+balanced/red-blacktrees[ 16,20]forin-memorysystems.As
+the original main-memory trees had poor cache behavior, sev-
+eral cache conscious B+-tree variants were proposed, such as
+the CSB+-tree [ 58]. Similarly, there has been work on making
+use of SIMD instructions such as FAST [ 44] or even taking
+advantageofGPUs[ 43,44,61].Moreover,manyofthese(in-
+memory) indexes are able to reduce their storage-needs by
+usingoffsetsratherthanpointersbetweennodes.Thereexists
+also a vast array of research on index structures for text, such
+astries/radix-trees[ 19,31,45],orotherexoticindexstructures,
+which combine ideas from B-Trees and tries [48].
+However, all of these approaches are orthogonal to the
+idea of learned indexes as none of them learn from the data
+distributiontoachieveamorecompactindexrepresentation
+or performance gains. At the same time, like with our hybrid
+indexes, it might be possible to more tightly integrate theexisting hardware-conscious index strategies with learned
+models for further performance gains.
+Since B+-trees consume significant memory, there has also
+been a lot of work in compressing indexes, such as prefix/suf-
+fix truncation, dictionary compression, key normalization [ 33,
+36,55], or hybrid hot/cold indexes [ 75]. However, we pre-
+sented a radical different way to compress indexes, which—
+dependent on the data distribution—is able to achieve orders-
+of-magnitude smaller indexes and faster look-up times andpotentially even changes the storage complexity class (e.g.,
+O(n)t oO(1) ). Interestingly though, some of the existing com-
+pressiontechniquesarecomplimentarytoourapproachand
+could help to further improve the efficiency. For example, dic-
+tionary compression can be seen as a form of embedding (i.e.,
+representing a string as a unique integer).
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+499

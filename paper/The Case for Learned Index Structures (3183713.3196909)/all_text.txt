@@ -1,0 +1,1758 @@
+The Case for Learned Index Structures
+Tim Kraska∗
+MIT
+kraska@mit.eduAlex Beutel
+Google, Inc.
+abeutel@google.comEd H. Chi
+Google, Inc.
+edchi@google.comJeffrey Dean
+Google, Inc.
+jeff@google.comNeoklis Polyzotis
+Google, Inc.
+npoly@google.com
+ABSTRACT
+Indexes are models: a B-Tree-Index can be seen as a model to
+mapakeytothe positionofarecordwithinasortedarray,a
+Hash-Index as a model to map a key to a position of a record
+withinanunsortedarray,andaBitMap-Indexasamodeltoin-
+dicateifadatarecordexistsornot.Inthisexploratoryresearch
+paper, we start from this premise and posit that all existing
+indexstructurescanbereplacedwithothertypesofmodels,in-
+cluding deep-learning models, which we term learned indexes.
+Wetheoreticallyanalyzeunderwhichconditionslearnedin-
+dexesoutperformtraditionalindexstructuresanddescribethe
+main challenges in designing learned index structures. Our
+initial results show that our learned indexes can have signifi-
+cant advantagesovertraditional indexes. Moreimportantly,
+webelievethattheideaofreplacingcorecomponentsofadata
+management system through learned models has far reaching
+implications for future systems designs and that this work
+provides just a glimpse of what might be possible.
+ACM Reference Format:
+TimKraska,AlexBeutel,EdH.Chi,JeffreyDean,andNeoklisPolyzotis.
+2018. The Case for Learned Index Structures. In SIGMOD’18: 2018
+International Conference on Management of Data, June 10–15, 2018,
+Houston, TX, USA. , 16 pages. https://doi.org/10.1145/3183713.3196909
+1 INTRODUCTION
+Whenever efficient data access is needed, index structures
+are the answer, and a wide variety of choices exist to address
+the different needs of various access patterns. For example,
+B-Treesarethebestchoiceforrangerequests(e.g.,retrieveall
+recordsinacertaintimeframe);Hash-mapsarehardtobeat
+in performance for single key look-ups; and Bloom filters are
+typicallyusedtocheckforrecordexistence.Becauseoftheir
+importancefordatabasesystemsandmanyotherapplications,
+indexes have been extensively tuned over the past decades to
+be more memory, cache and/or CPU efficient [11, 29, 36, 59].
+Yet, all of those indexes remain general purpose data struc-
+tures; they assume nothing about the data distribution and do
+nottakeadvantageofmorecommonpatternsprevalentinreal
+world data. For example, if the goal is to build a highly-tuned
+system to store and query ranges of fixed-length records over
+∗Work done while the author was affiliated with Google.
+SIGMOD’18, June 10–15, 2018, Houston, TX, USA
+© 2018 Copyright held by the owner/author(s).
+ACM ISBN 978-1-4503-4703-7/18/06.
+https://doi.org/10.1145/3183713.3196909asetofcontinuousintegerkeys(e.g.,thekeys1to100M),one
+wouldnotuseaconventionalB-Treeindexoverthekeyssince
+thekeyitselfcanbeusedasanoffset,makingitan O(1)rather
+thanO(logn)operationtolook-upanykeyorthebeginning
+of a range of keys. Similarly, the index memory size would be
+reduced from O(n)t oO(1). Maybe surprisingly, similar opti-
+mizations are possible for other data patterns. In other words,
+knowingtheexactdatadistributionenableshighlyoptimizing
+almost any index structure.
+Of course, in most real-world use cases the data do not
+perfectlyfollowaknownpatternandtheengineeringeffort
+to build specialized solutions for every use case is usually too
+high.However,wearguethatmachinelearning(ML)opens
+up the opportunity to learn a model that reflects the patterns
+in the data and thus to enable the automatic synthesis of spe-
+cializedindexstructures,termed learnedindexes ,withlow
+engineering cost.
+Inthispaper,weexploretheextenttowhichlearnedmodels,
+including neural networks, can be used to enhance, or evenreplace, traditional index structures from B-Trees to Bloomfilters. This may seem counterintuitive because ML cannotprovide the semantic guarantees we traditionally associate
+withtheseindexes,andbecausethemostpowerfulMLmodels,
+neural networks, are traditionally thought of as being very
+compute expensive. Yet, we argue that none of these apparent
+obstacles areas problematic asthey mightseem. Instead, our
+proposaltouselearnedmodelshasthepotentialforsignificant
+benefits, especially on the next generation of hardware.
+In terms of semantic guarantees, indexes are already to a
+large extent learned models making it surprisingly straight-
+forwardtoreplacethemwithothertypesofMLmodels.For
+example, a B-Tree can be considered as a model which takes a
+key as an input and predicts the position of a data record in a
+sortedset(thedatahastobesortedtoenableefficientrange
+requests). A Bloom filter is a binary classifier, which based on
+akeypredictsifakeyexistsinasetornot.Obviously,there
+exists subtle but important differences. For example, a Bloom
+filtercanhavefalsepositivesbutnotfalsenegatives.However,
+as we will show in this paper, it is possible to address these
+differencesthroughnovellearningtechniquesand/orsimple
+auxiliary data structures.
+In terms of performance, we observe that every CPU al-
+readyhaspowerfulSIMDcapabilitiesandwespeculatethat
+many laptops and mobile phones will soon have a Graphics
+ProcessingUnit(GPU)orTensorProcessing Unit(TPU).Itis
+also reasonable to speculate that CPU-SIMD/GPU/TPUs will
+be increasingly powerful as it is much easier to scale the re-
+strictedsetof(parallel)mathoperationsusedbyneuralnets
+than a general purpose instruction set. As a result the high
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+489
+costtoexecuteaneuralnetorotherMLmodelsmightactu-
+ally be negligible in the future. For instance, both Nvidia and
+Google’s TPUs are already able to perform thousands if not
+tensofthousandsofneuralnetoperationsinasinglecycle[ 3].
+Furthermore,itwasstatedthatGPUswillimprove1000 ×in
+performance by 2025, whereas Moore’s law for CPUs is essen-
+tially dead [ 5]. By replacing branch-heavy index structures
+withneuralnetworks,databasesandothersystemscanben-
+efit from these hardware trends. While we see the future of
+learnedindexstructuresonspecializedhardware,likeTPUs,
+thispaperfocusesentirelyonCPUsandsurprisinglyshows
+that we can achieve significant advantages even in this case.
+Itisimportanttonotethatwedonotarguetocompletelyre-
+placetraditionalindexstructureswithlearnedindexes.Rather,
+the main contribution of this paper is to outline and
+evaluate the potential of a novel approach to build in-dexes,whichcomplementsexistingworkand,arguably,opensupanentirelynewresearchdirectionforadecades-oldfield.
+Thisisbasedonthekeyobservationthat manydata
+structurescanbedecomposedintoalearnedmodeland
+anauxiliarystructure toprovidethesamesemanticguaran-
+tees.Thepotentialpowerofthisapproachcomesfromthefact
+thatcontinuous functions, describing the data distribu-
+tion,canbeusedtobuildmoreefficientdatastructures
+or algorithms . We empirically get very promising results
+when evaluating our approach on synthetic and real-world
+datasetsforread-onlyanalyticalworkloads.However,many
+open challenges still remain, such as how to handle write-
+heavy workloads, and we outline many possible directions
+for future work. Furthermore, we believe that we can use the
+same principle to replace other components and operations
+commonlyusedin(database)systems.Ifsuccessful,thecore
+idea of deeply embedding learned models into algorithms and
+data structures could lead to a radical departure from the way
+systems are currently developed.
+The remainder of this paper is outlined as follows: In the
+next two sections we introduce the general idea of learned
+indexesusing B-Treesas anexample.In Section 4weextend
+thisideatoHash-mapsandinSection5toBloomfilters.All
+sections contain a separate evaluation. Finally in Section 6 we
+discuss related work and conclude in Section 7.
+2 RANGE INDEX
+Range index structure, like B-Trees, are already models: given
+a key, they “predict” the location of a value within a key-
+sorted set. To see this, consider a B-Tree index in an analytics
+in-memorydatabase(i.e.,read-only)overthesortedprimary
+key columnas shown in Figure1(a).In this case, theB-Treeprovides a mapping from a look-up key to a position insidethe sorted array of records with the guarantee that the keyof the record at that position is the first key equal or higher
+than the look-up key. The data has to be sorted to allow for
+efficient range requests. This same general concept also ap-
+plies to secondary indexes where the data would be the list of
+BTreeKey
+pos
+pos - 0 pos + pagezise… …pos
+pos - min_err pos + max_er… …Model 
+(e.g., NN)(b) Learned Index (a) B-Tree Index
+Key
+Figure 1: Why B-Trees are models
+<key,record_pointer> pairswith thekeybeing theindexed
+value and the pointer a reference to the record.1
+For efficiency reasons it is common not to index every sin-
+gle key of the sorted records, rather only the key of every
+n-th record, i.e., the first key of a page. Here we only assume
+fixed-length records and logical paging over a continuous
+memoryregion,i.e.,asinglearray,notphysicalpageswhich
+arelocatedindifferentmemoryregions(physicalpagesand
+variable length records are discussed in Appendix D.2). In-
+dexingonlythefirstkeyofeverypagehelpstosignificantly
+reduce the number of keys the index has to store without any
+significant performancepenalty. Thus, theB-Tree is amodel,
+or in ML terminology, a regression tree: it maps a key to a
+position with a min- and max-error (a min-error of 0 and a
+max-error of the page-size), with a guarantee that the key
+canbefoundinthatregionifitexists.Consequently,wecan
+replace the index with other types of ML models, including
+neural nets, as long as they are also able to provide similar
+strong guarantees about the min- and max-error.
+At first sight it may seem hard to provide the same guar-
+antees with other types of ML models, but it is actually sur-prisingly simple. First, the B-Tree only provides the strong
+min-andmax-errorguaranteeoverthestoredkeys,notforall
+possiblekeys.Fornewdata,B-Treesneedtobere-balanced,
+or in machine learning terminology re-trained, to still be able
+toprovidethesameerrorguarantees.Thatis,formonotonic
+modelstheonlythingweneedtodoistoexecutethemodelfor
+everykeyandremembertheworstover-andunder-prediction
+ofapositiontocalculatethemin-andmax-error.2Second,and
+moreimportantly,thestrongerrorboundsarenotevenneeded.
+Thedatahastobesortedanywaytosupportrangerequests,
+so any error is easily corrected by a local search around theprediction(e.g.,usingexponentialsearch)andthus,evenal-
+lows for non-monotonic models. Consequently, we are ableto replace B-Trees with any other type of regression model,
+including linear regression or neural nets (see Figure 1(b)).
+Now,thereareothertechnicalchallengesthatweneedto
+addressbeforewecanreplaceB-Treeswithlearnedindexes.
+For instance, B-Trees have a bounded cost for inserts and
+1Note, that against some definitions for secondary indexes we do not consider
+the<key,record_pointer> pairs as part of the index; rather for secondary
+index the data are the <key,record_pointer> pairs. This is similar to how
+indexesareimplementedinkeyvaluestores[ 12,21]orhowB-Treesonmodern
+hardware are designed [44].
+2The model has to be monotonic to also guarantee the min- and max-error for
+look-up keys, which do not exist in the stored set.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+490look-ups and are particularly good at taking advantage of
+the cache. Also, B-Trees can map keys to pages which are
+not continuously mapped to memory or disk. All of these are
+interestingchallenges/researchquestionsandareexplained
+inmoredetail,togetherwithpotentialsolutions,throughout
+this section and in the appendix.
+At the same time, using other typesof models as indexes
+can provide tremendous benefits. Most importantly, it has
+the potential to transform the logncost of a B-Tree look-
+upintoaconstantoperation.Forexample,assumeadataset
+with 1M unique keys with a value from 1M and 2M (so the
+value 1,000,009 is stored at position 10). In this case, a simple
+linear model, which consists of a single multiplication andaddition, can perfectly predict the position of any key for a
+point look-up or range scan, whereas a B-Tree would require
+lognoperations.Thebeautyofmachinelearning,especially
+neural nets, is that they are able to learn a wide variety of
+datadistributions,mixturesandotherdatapeculiaritiesand
+patterns. The challenge is to balance the complexity of the
+model with its accuracy.
+Formostofthediscussioninthispaper,wekeepthesimpli-
+fied assumptions of this section: we only index an in-memory
+densearraythatissortedbykey.Thismayseemrestrictive,but many modern hardware optimized B-Trees, e.g., FAST
+[44],makeexactlythesameassumptions,andtheseindexes
+arequitecommonforin-memorydatabasesystemsfortheir
+superior performance [ 44,48] over scanning or binary search.
+However,whilesomeofourtechniquestranslatewelltosome
+scenarios(e.g.,disk-residentdatawithverylargeblocks,for
+example, as used in Bigtable [ 23]), for other scenarios (fine
+grainedpaging,insert-heavyworkloads,etc.)moreresearchis
+needed. In Appendix D.2 we discuss some of those challenges
+and potential solutions in more detail.
+2.1 What Model Complexity Can We
+Afford?
+To better understand the model complexity, it is important to
+know how many operations can be performed in the same
+amountoftimeittakestotraverseaB-Tree,andwhatprecision
+the model needs to achieve to be more efficient than a B-Tree.
+ConsideraB-Treethatindexes100Mrecordswithapage-
+size of 100. We can think of every B-Tree node as a way to
+partition the space, decreasing the “error” and narrowing the
+region to find the data. We therefore say that the B-Tree with
+apage-sizeof100hasa precisiongain of1/100pernodeand
+weneedtotraverseintotal loд100Nnodes.Sothefirstnode
+partitionsthespacefrom100 Mto100M/100 = 1M,thesecond
+from 1Mto 1M/100 = 10kand so on, until we find the record.
+Now,traversingasingleB-Treepagewithbinarysearchtakes
+roughly 50 cycles and is notoriously hard to parallelize3.I n
+contrast,amodernCPUcando8-16SIMDoperationspercycle.
+3ThereexistSIMDoptimizedindexstructuressuchasFAST[ 44],buttheycan
+only transform control dependencies to memory dependencies. These are often
+significantlyslowerthanmultiplicationswithsimplein-cachedatadependencies
+andasourexperimentsshowSIMDoptimizedindexstructures,likeFAST,are
+not significantly faster.Thus,amodelwillbefasteraslongasithasabetterprecision
+gainthan1/100per50 ∗8 = 400arithmeticoperations.Note
+thatthiscalculationstillassumesthatallB-Treepagesarein
+the cache.A single cache-miss costs 50-100additional cycles
+and would thus allow for even more complex models.
+Additionally, machine learning accelerators are entirely
+changing the game. They allow to run much more complex
+modelsinthesameamountoftimeandoffloadcomputation
+from the CPU. For example, NVIDIA’s latest Tesla V100 GPU
+isabletoachieve120TeraFlopsoflow-precisiondeeplearn-
+ing arithmetic operations ( ≈60,000 operations per cycle).
+Assuming that the entire learned index fits into the GPU’s
+memory (we show in Section 3.7 that this is a very reasonable
+assumption), in just 30 cycles we could execute 1 million neu-
+ral net operations. Of course, the latency for transferring the
+inputandretrievingtheresultfromaGPUisstillsignificantly
+higher, but this problem is not insuperable given batching
+and/ortherecenttrendtomorecloselyintegrateCPU/GPU/T-PUs[
+4].Finally,itcanbeexpectedthatthecapabilitiesandthe
+numberoffloating/intoperationspersecondofGPUs/TPUs
+will continue to increase, whereas the progress on increasing
+the performance of executing if-statements of CPUs essen-
+tiallyhasstagnated[ 5].Regardlessofthefactthatweconsider
+GPUs/TPUs as one of the main reasons to adopt learned in-
+dexesinpractice,inthispaperwefocusonthemorelimited
+CPUstobetterstudytheimplicationsofreplacingandenhanc-
+ingindexesthroughmachinelearningwithouttheimpactof
+hardware changes.
+2.2 Range Index Models are CDF Models
+As stated in the beginning of the section, an index is a model
+that takes a key as an input and predicts the position of the
+record. Whereas for point queries the order of the records
+does not matter, for range queries the data has to be sorted
+according to the look-up key so that all data items in a range
+(e.g.,inatimeframe)canbeefficientlyretrieved.Thisleadsto
+an interesting observation: a model that predicts the position
+given a key inside a sorted array effectively approximates the
+cumulative distribution function (CDF). We can model the
+CDF of the data to predict the position as:
+p=F(Key)∗N (1)
+wherepis the position estimate, F(Key) is the estimated cu-
+mulative distribution function for the data to estimate thelikelihood to observe a key smaller or equal to the look-upkey
+P(X≤Key), andNis the total number of keys (see also
+Figure 2). This observation opens up a whole new set of in-teresting directions: First, it implies that indexing literally
+requires learning a data distribution. A B-Tree “learns” the
+datadistributionbybuildingaregressiontree.Alinearregres-
+sionmodelwouldlearnthedatadistributionbyminimizing
+the(squared)errorofalinearfunction.Second,estimatingthedistributionforadatasetisawellknownproblemandlearned
+indexes can benefit from decades of research. Third, learning
+the CDF plays also a key role in optimizing other types of
+indexstructuresandpotentialalgorithmsaswewilloutline
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+4911PT
+,FZ
+Figure 2: Indexes as CDFs
+laterinthispaper.Fourth,thereisalonghistoryofresearch
+on how closely theoretical CDFs approximate empirical CDFs
+thatgivesafootholdtotheoreticallyunderstandthebenefits
+ofthisapproach[ 28].Wegiveahigh-leveltheoreticalanalysis
+of how well our approach scales in Appendix A.
+2.3 A First, Naïve Learned Index
+To better understand the requirements to replace B-Trees
+throughlearnedmodels,weused200Mweb-serverlogrecords
+with the goal of building a secondary index over the times-
+tamps using Tensorflow [ 9]. We trained a two-layer fully-
+connected neural network with 32 neurons per layer using
+ReLUactivationfunctions;thetimestampsaretheinputfea-
+turesandthepositionsinthesortedarrayarethelabels.After-
+wards we measured the look-up time for a randomly selected
+key(averagedoverseveralrunsdisregardingthefirstnumbers)
+with Tensorflow and Python as the front-end.
+Inthissettingweachieved ≈1250predictionspersecond,
+i.e., it takes ≈80,000 nano-seconds (ns) to execute the model
+with Tensorflow, without the search time (the time to find the
+actualrecordfromthepredictedposition).Asacomparison
+point,aB-Treetraversaloverthesamedatatakes ≈300nsand
+binary search over the entire data roughly ≈900ns. With a
+closerlook,wefindournaïveapproachislimitedinafewkey
+ways: (1) Tensorflow was designed to efficiently run larger
+models,notsmallmodels,andthus,hasasignificantinvocation
+overhead,especiallywithPythonasthefront-end.(2)B-Trees,
+or decision trees in general, are really good in overfitting the
+datawithafewoperationsastheyrecursivelydividethespace
+usingsimpleif-statements.Incontrast,othermodelscanbe
+significantlymoreefficienttoapproximatethegeneralshapeofaCDF,buthaveproblemsbeingaccurateattheindividualdata
+instance level. To see this, consider again Figure 2. The figure
+demonstrates, that from a top-level view, the CDF function
+appearsverysmoothandregular.However,ifonezoomsin
+to theindividual records, more and moreirregularities show;
+awellknownstatisticaleffect.Thusmodelslikeneuralnets,
+polynomial regression, etc. might be more CPU and spaceefficient to narrow down the position for an item from the
+entire dataset to a region of thousands, but a single neural netusuallyrequiressignificantlymorespaceandCPUtimeforthe
+“lastmile”toreducetheerrorfurtherdownfromthousands
+tohundreds.(3)B-Treesareextremelycache-andoperation-
+efficientastheykeepthetopnodesalwaysincacheandaccessotherpagesifneeded.Incontrast,standardneuralnetsrequire
+all weights to compute a prediction, which has a high cost in
+the number of multiplications.3 THE RM-INDEX
+In order to overcome the challenges and explore the potential
+ofmodelsasindexreplacementsoroptimizations,wedevel-
+oped the learning index framework (LIF), recursive-model
+indexes (RMI), and standard-error-based search strategies. Weprimarilyfocusonsimple,fully-connectedneuralnetsbecause
+oftheirsimplicityandflexibility,butwebelieveothertypes
+of models may provide additional benefits.
+3.1 The Learning Index Framework (LIF)
+TheLIFcanberegardedasanindexsynthesissystem;given
+anindexspecification,LIFgeneratesdifferentindexconfigu-
+rations,optimizesthem,andteststhemautomatically.While
+LIF can learn simple models on-the-fly (e.g., linear regression
+models), it relies on Tensorflow for more complex models
+(e.g., NN). However, it never uses Tensorflow at inference.
+Rather,givenatrainedTensorflowmodel,LIFautomatically
+extracts all weights from the model and generates efficient
+index structures in C++ based on the model specification. Our
+code-generation is particularly designed for small models and
+removesallunnecessaryoverheadandinstrumentationthat
+Tensorflowhastomanagethelargermodels.Hereweleverage
+ideasfrom[ 25],whichalreadyshowedhowtoavoidunnec-
+essaryoverheadfromtheSpark-runtime.Asaresult,weare
+abletoexecutesimplemodelsontheorderof30nano-seconds.
+However, it should be pointed out that LIF is still an experi-
+mentalframeworkandisinstrumentalizedtoquicklyevaluate
+different index configurations (e.g., ML models, page-sizes,
+search strategies, etc.), which introduces additional overhead
+in form of additional counters, virtual function calls, etc. Also
+besidesthevectorizationdonebythecompiler,wedonotmake
+useofspecialSIMDintrinisics.Whiletheseinefficienciesdo
+not matter in our evaluation as we ensure a fair compari-
+son by always using our framework, for a production setting
+or when comparing the reported performance numbers with
+otherimplementations,theseinefficienciesshouldbetaking
+into account/be avoided.
+3.2 The Recursive Model Index
+AsoutlinedinSection2.3oneofthekeychallengesofbuilding
+alternative learned models to replace B-Trees is the accuracy
+forlast-milesearch.Forexample,reducingthepredictionerror
+to the order of hundreds from 100M records using a single
+modelisoftendifficult.Atthesametime,reducingtheerror
+to10kfrom100M,e.g.,aprecisiongainof100 ∗100 = 10000to
+replace the first 2 layers of a B-Tree through a model, is much
+easiertoachieveevenwithsimplemodels.Similarly,reducing
+the error from 10k to 100 is a simpler problem as the model
+can focus only on a subset of the data.
+Basedonthatobservationandinspiredbythemixtureof
+experts work [ 62], we propose the recursive regression model
+(see Figure 3). That is, webuild a hierarchy of models, where
+ateachstagethemodeltakesthekeyasaninputandbasedon it picks another model, until the final stage predicts the
+position.Moreformally,forourmodel f(x)wherexisthekey
+andy∈[0,N) the position, we assume at stage /lscriptthere are
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+492.PEFM
+.PEFM .PEFM .PEFM
+.PEFM .PEFM .PEFM .PEFM۪
+۪4UBHF4UBHF 4UBHF
+1PTJUJPO,FZ
+Figure 3: Staged models
+M/lscriptmodels. We train the model at stage 0, f0(x)≈y. As such,
+modelkin stage/lscript, denoted by f(k)
+/lscript, is trained with loss:
+L/lscript=/summationdisplay
+(x,y)(f(⌊M/lscriptf/lscript−1(x)/N⌋)
+/lscript(x)−y)2L0=/summationdisplay
+(x,y)(f0(x)−y)2
+Note,weuseherethenotationof f/lscript−1(x)recursivelyexe-
+cutingf/lscript−1(x)=f(⌊M/lscript−1f/lscript−2(x)/N⌋)
+/lscript−1(x). In total, we iteratively
+train each stage with loss L/lscriptto build the complete model.
+One way to think about the different models is that each
+model makesa prediction with acertain error about thepo-
+sition for the keyand that the prediction is used to select the
+next model, which is responsible for a certain area of the key-
+spacetomakeabetterpredictionwithalowererror.However,
+recursive model indexes do nothave to be trees. As shown in
+Figure3itispossiblethatdifferentmodelsofonestagepick
+the same models at the stage below. Furthermore, each model
+does not necessarily cover the same amount of records like
+B-Trees do (i.e., a B-Tree with a page-size of 100 covers 100
+or less records).4Finally, depending on the used models the
+predictionsbetweenthedifferentstagescannotnecessarily
+be interpreted as positions estimates, rather should be consid-
+eredaspickinganexpertwhichhasabetterknowledgeabout
+certain keys (see also [62]).
+Thismodelarchitecturehasseveralbenefits:(1)Itseparates
+modelsizeandcomplexityfromexecutioncost.(2)Itleverages
+the fact that it is easy to learn the overall shape of the data
+distribution.(3)Iteffectivelydividesthespaceintosmallersub-ranges, like a B-Tree, to make it easier to achieve the required
+“last mile” accuracy with fewer operations. (4) There is no
+searchprocessrequiredin-betweenthestages.Forexample,
+theoutputof Model1.1 isdirectlyusedtopickthemodelinthe
+nextstage.Thisnotonlyreducesthenumberofinstructionsto
+manage the structure, but also allows representing the entire
+index as a sparse matrix-multiplication for a TPU/GPU.
+3.3 Hybrid Indexes
+Another advantage of the recursive model index is, that we
+are able to build mixtures of models. For example, whereas on
+thetop-layerasmallReLUneuralnetmightbethebestchoice
+as they are usually able to learn a wide-range of complex data
+distributions,themodelsatthebottomofthemodelhierarchymightbethousandsofsimplelinearregressionmodelsastheyare inexpensive in space and execution time. Furthermore, we
+4Note, that we currently train stage-wise and not fully end-to-end. End-to-end
+training would be even better and remains future work.canevenusetraditionalB-Treesatthebottomstageifthedata
+is particularly hard to learn.
+Forthispaper,wefocuson2typesofmodels,simpleneural
+netswithzerototwofully-connectedhiddenlayersandReLU
+activation functions and a layer width of up to 32 neuronsand B-Trees (a.k.a. decision trees). Note, that a zero hidden-layer NN is equivalent to linear regression. Given an index
+configuration,whichspecifiesthenumberofstagesandthe
+numberofmodelsperstageasanarrayofsizes,theend-to-end
+training for hybrid indexes is done as shown in Algorithm 1
+Algorithm 1: Hybrid End-To-End Training
+Input:int threshold, int stages[], NN_complexity
+Data:record data[], Model index[][]
+Result:trained index
+1M= stages.size;
+2tmp_records[][];
+3tmp_records[1][1] = all_data;
+4fori←1toMdo
+5forj←1tostaдes[i]do
+6 index[i][j] = new NN trained on tmp_records[ i][j];
+7 ifi<Mthen
+8 forr∈tmp_records[ i][j]do
+9 p= index[i][j] (r.key)/ stages[i+1];
+10 tmp_records[ i+1][p].add(r);
+11forj←1toindex[M].sizedo
+12index[M][j].calc_err(tmp_records[ M][j]);
+13ifindex[M][j].max_abs_err>threshold then
+14 index[M][j] = new B-Tree trained on tmp_records[ M][j];
+15returnindex;
+Startingfromtheentiredataset(line3),ittrainsfirstthetop-
+nodemodel.Basedonthepredictionofthistop-nodemodel,it
+then picks the model from the next stage (lines 9 and 10) and
+adds all keys which fall into that model (line 10). Finally, in
+thecaseofhybridindexes,theindexisoptimizedbyreplacing
+NNmodelswithB-Treesifabsolute min-/max-errorisabove
+a predefined threshold (lines 11-14).
+Note, that we store the standard and min- and max-error
+for every model on the last stage. That has the advantage,
+that we can individually restrict the search space based on
+theused modelfor everykey.Currently, wetune thevarious
+parameters of the model (i.e., number of stages, hidden layers
+per model, etc.) with a simple simple grid-search. However,
+manypotentialoptimizationsexists tospeedupthetraining
+process from ML auto tuning to sampling.
+Note,thathybridindexesallowustoboundtheworst
+caseperformanceoflearnedindexestotheperformanceof B-Trees.
+That is, in the case of an extremely difficult to
+learn data distribution, all models would be automatically re-
+placed by B-Trees, making it virtually an entire B-Tree.
+3.4 Search Strategies and Monotonicity
+Rangeindexesusuallyimplementan upper_bound(key)[lower_
+bound(key)]interfacetofindthepositionofthefirstkeywithin
+the sorted array that is equal or higher [lower] than the look-
+upkeytoefficientlysupportrangerequests.Forlearnedrange
+indexes we therefore have to find the first key higher [lower]
+fromthelook-upkeybasedontheprediction.Despitemany
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+493efforts, it was repeatedly reported [ 8] that binary search or
+scanningforrecordswithsmallpayloadsareusuallythefastest
+strategies to find a key within a sorted array as the additional
+complexity of alternative techniques rarely pays off. However,
+learned indexes might have an advantage here: the models
+actuallypredictthepositionofthekey,notjusttheregion(i.e.,
+page)ofthekey.Herewediscusstwosimplesearchstrategies
+which take advantage of this information:
+ModelBiased Search: Our default search strategy, which
+only varies from traditional binary search in that the first
+middlepoint is set to the value predicted by the model.
+Biased Quaternary Search: Quaternary search takes in-
+stead of one split point three points with the hope that the
+hardwarepre-fetches allthreedata pointsatonce toachieve
+betterperformanceifthedataisnotincache.Inourimplemen-
+tation,wedefinedtheinitialthreemiddlepointsofquaternary
+search as pos−σ,pos,pos+σ. That is we make a guess that
+mostofourpredictionsareaccurateandfocusourattention
+first around the position estimate and then we continue with
+traditional quaternary search.
+For all our experiments we used the min- and max-error
+as the search area for all techniques. That is, we executed
+theRMImodelforeverykeyandstoredtheworstover-and
+under-predictionperlast-stagemodel.Whilethistechnique
+guarantees to find all existing keys, for non-existing keys it
+mightreturnthewrongupperorlowerboundiftheRMImodel
+is not monotonic. To overcome this problem, one option is to
+force our RMI model to be monotonic, as has been studied in
+machine learning [41, 71].
+Alternatively, for non-monotonic models we can automati-
+callyadjustthesearcharea.Thatis,ifthefoundupper(lower)boundkeyisontheboundaryofthesearchareadefinedbythe
+min- and max-error, we incrementally adjust the search area.
+Yet,anotherpossibilityis,touseexponentialsearchtechniques.
+Assuming a normal distributed error, those techniques on av-
+erage should work as good as alternative search strategies
+while not requiring to store any min- and max-errors.
+3.5 Indexing Strings
+Wehaveprimarilyfocusedonindexingrealvaluedkeys,but
+manydatabasesrelyonindexingstrings,andluckily,signif-icant machine learning research has focused on modeling
+strings.Asbefore,weneedtodesignamodelofstringsthat
+isefficientyetexpressive. Doingthiswellforstringsopensa
+number of unique challenges.
+The first design consideration is how to turn strings into
+features for themodel, typically called tokenization. Forsim-
+plicityandefficiency,weconsideran n-lengthstringtobea
+feature vector x∈Rnwhere xiis the ASCII decimal value
+(or Unicode decimal value depending on the strings). Further,
+most ML models operate more efficiently if all inputs are of
+equal size. As such, we will set a maximum input length N.
+Becausethe dataissorted lexicographically,wewill truncate
+the keys to length Nbefore tokenization. For strings with
+lengthn<N,w es e tx i= 0 fori>n.Forefficiency,wegenerallyfollowasimilarmodelingap-
+proach as we did for real valued inputs. We learn a hierarchy
+of relatively small feed-forward neural networks. The one dif-
+ferenceisthattheinputisnotasinglerealvalue xbutavector
+x. Linear models w·x+bscale the number of multiplications
+and additions linearly with the input length N. Feed-forward
+neural networks with even a single hidden layer of width h
+will scale O(hN) multiplications and additions.
+Ultimately,webelievethereissignificantfutureresearch
+thatcanoptimizelearnedindexesforstringkeys.Forexample,
+we could easily imagine other tokenization algorithms. There
+is a large body of research in natural language processing on
+stringtokenizationtobreakstringsintomoreusefulsegments
+for ML models, e.g., wordpieces in translation [ 70]. Further, it
+mightbeinterestingtocombinetheideaofsuffix-treeswith
+learned indexes as well as explore more complex model archi-
+tectures (e.g., recurrent and convolutional neural networks).
+3.6 Training
+Whilethetraining(i.e.,loading)timeisnotthefocusofthis
+paper, it should be pointed out that all of our models, shallow
+NNs or even simple linear/multi-variate regression models,train relatively fast. Whereas simple NNs can be efficientlytrained using stochastic gradient descent and can converge
+in less than one to a few passes over the randomized data,
+aclosedformsolutionexistsforlinearmulti-variatemodels
+(e.g., also 0-layer NN) and they can be trained in a single pass
+over the sorted data. Therefore, for 200M records traininga simple RMI index does not take much longer than a few
+seconds,(ofcourse,dependingonhowmuchauto-tuningis
+performed); neural nets can train on the order of minutes per
+model,dependingonthecomplexity.Alsonotethattraining
+the top model over the entire data is usually not necessary as
+thosemodelsconvergeoftenevenbeforeasinglescanoverthe
+entire randomized data. This is in part because we use simple
+modelsanddonotcaremuchaboutthelastfewdigitpoints
+in precision, as it has little effect on indexing performance.Finally, research on improving learning time from the ML
+community[ 27,72]applies inour contextandwe expecta lot
+of future research in this direction.
+3.7 Results
+Weevaluatedlearnedrangeindexesinregardtotheirspace
+andspeedonse veralrealandsyntheticdatasetsagainstother
+read-optimized index structures.
+3.7.1 Integer Datasets. As a first experiment we compared
+learnedindexesusinga2-stageRMImodelanddifferentsecond-
+stage sizes (10k, 50k, 100k, and 200k) with a read-optimized
+B-Treewithdifferentpagesizesonthreedifferentintegerdata
+sets.Forthedataweused2real-worlddatasets,(1)Weblogs
+and(2)Maps[ 56],and(3)asyntheticdataset,Lognormal.The
+Weblogsdatasetcontains200Mlogentriesforeveryrequest
+to a major university web-site over several years. We use the
+unique request timestamps as the index keys. This dataset
+is almost a worst-case scenario for the learned index as it
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+494	
+'$&' &"" $)&"+) #+* )$%. '#+% &"" $)("+& $"# )$). &+*% &"" $)&"+( #+* )$#.
+$($% $"" $))"+( #)$ ($". $'+) $"" $)&"+' #)# ($&. $&+$ $"" $)&"+( #(+ (#).
+#%## #"" $('#"" #%& '"*. #$+* #"" $("#"" #%$ '"*. #$&( #"" $(%#"" #%# '"".
+('( "'" $()"++ ##& &$). ( &+ "'" $(("+* ##& &$+. ($% "'" $)#"+) ##) &%$.
+%$* "$' $*("+% #"# %'%. % $' "$' $+#"*+ #"" %&%. %## "$' $+%"+" #"# %&'.
+$	#" "#' ""# +*$)" %# %#(. "#' ""# $$$##) $+ #%#. "#' ""# #)*#&) $( #&(.
+")( ""( *'%## %+ &'+. ") ( ""( #($#(" %( $$$. ")( ""( #($#($ %' $#(.
+#'% "#$ *$%$# &# '"$. #' % "#$ #&&#*# %+ $(+. #'% "#$ #'$#)% %( $%).
+%"' "$% *(%"* '" '*#. %" ' "$& #$($") &# %$'. %"' "$& #&(#)+ &" $)(.		
+				 
+		 			
+         
+		
+	'#$
+$	'"
+$	#""
+$	$""
+
+	%$
+	(&
+	#$*
+	$'(
+Figure 4: Learned Index vs B-Tree
+contains very complex time patterns caused by class sched-
+ules, weekends, holidays, lunch-breaks, department events,
+semester breaks, etc., which are notoriously hard to learn. For
+the maps dataset we indexed the longitude of ≈200M user-
+maintainedfeatures(e.g.,roads,museums,coffeeshops)across
+the world. Unsurprisingly, the longitude of locations is rela-
+tively linear and has fewer irregularities than the Weblogs
+dataset. Finally, to test how the index works on heavy-tail dis-
+tributions,wegeneratedasyntheticdatasetof190Munique
+values sampled from a log-normal distribution with μ=0
+andσ= 2. The values are scaled up to be integers up to 1B.
+Thisdataisofcoursehighlynon-linear,makingtheCDFmore
+difficult to learn using neural nets. For all B-Tree experiments
+we used 64-bit keys and 64-bit payload/value.
+Asourbaseline,weusedaproductionqualityB-Treeimple-
+mentationwhichissimilartothestx::btreebutwithfurther
+cache-lineoptimization,densepages(i.e.,fillfactorof100%),
+andverycompetitiveperformance.Totunethe2-stagelearnedindexesweusedsimplegrid-searchoverneuralnetswithzero
+to two hidden layers and layer-width ranging from 4 to 32
+nodes.Ingeneralwefoundthatasimple(0hiddenlayers)to
+semi-complex(2hiddenlayersand8-or16-wide)modelsfor
+the first stage work the best. For the second stage, simple, lin-
+earmodels,hadthebestperformance.Thisisnotsurprisingas
+for the last mile it is often not worthwhile to execute complex
+models, and linear models can be learned optimally.
+Learned Index vs B-Tree performance: The main re-
+sultsareshowninFigure4.Note,thatthepagesizeforB-Trees
+indicates the number of keys per page not the size in Bytes,
+whichisactuallylarger.Asthemainmetricsweshowthesize
+inMB,thetotallook-uptimeinnano-seconds,andthetimetoexecutionthemodel(eitherB-TreetraversalorMLmodel)also
+in nano-seconds and as a percentage compared to the total
+timeinparanthesis.Furthermore,weshowthespeedupand
+spacesavingscomparedtoaB-Treewithpagesizeof128in
+parenthesis as part of the size and lookup column. We choose
+a page size of 128 as the fixed reference point as it providesthe best lookup performance for B-Trees (note, that it is al-
+wayseasytosavespaceattheexpenseoflookupperformance
+bysimplyhavingnoindexatall).Thecolor-encodinginthe
+speedupandsizecolumnsindicateshowmuchfasterorslower
+(larger or smaller) the index is against the reference point.
+As can be seen, the learned index dominates the B-Tree
+index in almost all configurations by being up to 1 .5−3×faster whilebeingup to twoorders-of-magnitude smaller. Of
+course, B-Trees can be further compressed at the cost of CPU-
+timefordecompressing.However,mostoftheseoptimizations
+are orthogonal and apply equally (if not more) to neural nets.
+For example, neural nets can be compressed by using 4- or8-bit integers instead of 32- or 64-bit floating point valuesto represent the model parameters (a process referred to as
+quantization). Thislevelofcompressioncanunlockadditional
+gains for learned indexes.
+Unsurprisinglythesecondstagesizehasasignificantim-
+pact on the index size and look-up performance. Using 10,000
+or more models in the second stage is particularly impressive
+withrespecttotheanalysisin§2.1,asitdemonstratesthatour
+first-stagemodelcanmakeamuchlargerjumpinprecision
+than a single node in the B-Tree. Finally, we do not report on
+hybrid modelsor othersearch techniquesthan binary search
+for these datasets as they did not provide significant benefit.
+Learned Index vs Alternative Baselines: In addition to
+the detailed evaluation of learned indexes against our read-
+optimized B-Trees, we also compared learned indexes against
+other alternative baselines, including third party implementa-
+tions. In the following, we discuss some alternative baselines
+and compare them against learned indexes if appropriate:
+Histogram :B-TreesapproximatetheCDFoftheunderlying
+data distribution. An obvious question is whether histograms
+can be used as a CDF model. In principle the answer is yes,but to enable fast data access, the histogram must be a low-
+errorapproximationoftheCDF.Typicallythisrequiresalarge
+number of buckets, which makes it expensive to search thehistogram itself. This is especially true, if the buckets have
+varying bucket boundaries to efficiently handle data skew,
+so that only few buckets are empty or too full. The obvious
+solutions to thisissues would yield aB-Tree,and histograms
+are therefore not further discussed.
+Lookup-Table : A simple alternative to B-Trees are (hierar-
+chical) lookup-tables. Often lookup-tables have a fixed sizeand structure (e.g., 64 slots for which each slot points to an-
+other 64 slots, etc.). The advantage of lookup-tables is that
+because of their fixed size they can be highly optimized using
+AVXinstructions.Weincludedacomparisonagainsta3-stage
+lookuptable,whichisconstructedbytakingevery64thkey
+and putting it into an array including padding to make it a
+multipleof64.Thenwerepeatthatprocessonemoretimeover
+the array without padding, creating two arrays in total. To
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+495	
+"
+	# 
+"!
+
+	 
+ 
+ 	 
+	
+  
+ 
+	 
+ 
+
+Figure 5: Alternative Baselines
+lookupa key, weuse binarysearch onthe toptable followed
+by an AVX optimized branch-free scan [ 14] for the second
+tableandthedataitself.Thisconfigurationleadstothefastest
+lookuptimescomparedtoalternatives(e.g.,usingscanningon
+the top layer, or binary search on the 2nd array or the data).
+FAST:FAST[44]isahighlySIMDoptimizeddatastructure.
+Weusedthecodefrom[ 47]forthecomparison.However,it
+shouldbenotedthatFASTalwaysrequirestoallocatememory
+in the power of 2 to use the branch free SIMD instructions,
+which can lead to significantly larger indexes.
+Fixed-size B-Tree & interpolation search :Finally,asproposed
+inarecentblogpost[ 1]wecreatedafixed-heightB-Treewith
+interpolationsearch.TheB-Treeheightisset,sothatthetotal
+size of the tree is 1.5MB, similar to our learned model.
+Learned indexes without overhead :Forourlearnedindex
+weuseda2-stagedRMIindexwithamultivariatelinearregres-
+sion model at the top and simple linear models at the bottom.
+We used simple automatic feature engineering for the top
+model by automatically creating and selecting features in the
+form ofkey,loд(key),key2, etc. Multivariate linear regression
+is an interesting alternative to NN as it is particularly wellsuited to fit nonlinear patterns with only a few operations.
+Furthermore, we implemented the learned index outside of
+our benchmarking framework to ensure a fair comparison.
+For the comparison we used the Lognormal data with a
+payload of an eight-byte pointer. The results can be seen in
+Figure 5. As can be seen for the dataset under fair conditions,
+learned indexes provide the best overall performance while
+saving significant amount of memory. It should be noted, that
+the FAST index is big because of the alignment requirement.
+Whiletheresultsareverypromising,webynomeansclaim
+that learnedindexes will alwaysbe the best choice in terms
+of size or speed. Rather, learned indexes provide a new way
+to think about indexing and much more research is needed to
+fully understand the implications.
+3.7.2 String Datasets. Wealsocreatedasecondaryindex
+over 10M non-continuous document-ids of a large web index
+used as part of a real product at Google to test how learned
+indexes perform on strings. The results for the string-baseddocument-iddatasetareshowninFigure6,whichalsonow
+includeshybridmodels.Inaddition,weincludeourbestmodel
+in the table, which is a non-hybrid RMI model index with
+quaternary search, named “Learned QS” (bottom of the table).
+AllRMIindexes used10,000modelson the2ndstageand for
+hybrid indexes we used two thresholds, 128 and 64, as themaximum tolerated absolute error for a model before it is
+replaced with a B-Tree.
+As can be seen, the speedups for learned indexes over B-
+Trees for strings are not as prominent. Part of the reason is
+the comparably high cost of model execution, a problem that  
+
+    $
+
+     !$
+
+      !$
+
+   ! ! $
+	     $
+	  !   ! $
+% 	   !! $
+% 	     !$%	    $%	 !    !  $
+
+	 	    !$	
+
+
+
+
+Figure 6: String data: Learned Index vs B-Tree
+GPU/TPUswouldremove.Furthermore,searchingoverstrings
+is much more expensive thus higher precision often pays off;
+thereasonwhyhybridindexes,whichreplacebadperforming
+models through B-Trees, help to improve performance.
+Because of the cost of searching, the different search strate-
+giesmakeabiggerdifference.Forexample,thesearchtimefor
+aNNwith1-hiddenlayerandbiasedbinarysearchis1102 ns
+asshowninFigure6.Incontrast,ourbiasedquaternarysearch
+withthe samemodel onlytakes 658 ns, asignificantimprove-
+ment. The reason why biased search and quaternary search
+perform better is that they take the model error into account.
+4 POINT INDEX
+Nexttorangeindexes,Hash-mapsforpointlook-upsplaya
+similarlyimportantroleinDBMS.ConceptuallyHash-maps
+useahash-functiontodeterministicallymapkeystopositions
+inside an array (see Figure 7(a)). The key challenge for any
+efficient Hash-map implementation is to prevent too many
+distinctkeysfrombeingmappedtothesamepositioninside
+the Hash-map,henceforth referred toas a conflict. Forexam-
+ple,let’sassume100MrecordsandaHash-mapsizeof100M.
+For a hash-function which uniformly randomizes the keys,
+thenumberofexpectedconflictscanbederivedsimilarlyto
+thebirthdayparadoxandinexpectationwouldbearound33%
+or 33M slots. For each of these conflicts, the Hash-map archi-
+tecture needs to deal with this conflict. For example, separate
+chainingHash-maps wouldcreate alinked-list tohandlethe
+conflict (see Figure 7(a)). However, many alternatives exist
+including secondary probing, using buckets with several slots,
+up to simultaneously using more than one hash function (e.g.,
+as done by Cuckoo Hashing [57]).
+However,regardlessoftheHash-maparchitecture,conflicts
+can have a significant impact of the performance and/or stor-
+age requirement, and machine learned models might provide
+an alternative to reduce the number of conflicts. While the
+ideaoflearningmodelsasahash-functionisnotnew,exist-
+ingtechniquesdonottakeadvantageoftheunderlyingdata
+distribution. For example, the various perfect hashing tech-
+niques [26] also try to avoid conflicts but the data structure
+usedaspartofthehashfunctionsgrowwiththedatasize;a
+propertylearnedmodelsmightnothave(recall,theexample
+of indexing all keys between 1 and 100M). To our knowledge
+it has not been explored if it is possible to learn models which
+yield more efficient point indexes.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+496)BTI
+'VODUJPO,FZ.PEFM,FZ	B
+5SBEJUJPOBM)BTI.BQ 	C
+-FBSOFE)BTI.BQ
+Figure 7: Traditional Hash-map vs Learned Hash-map
+4.1 The Hash-Model Index
+Surprisingly,learningtheCDFofthekeydistributionisone
+potential way to learn a better hash function. However, in
+contrastto rangeindexes,we donotaimto storetherecords
+compactly or in strictly sorted order. Rather we can scale
+the CDF by the targeted size Mof the Hash-map and use
+h(K)=F(K)∗M,withkey Kasourhash-function.Ifthemodel
+FperfectlylearnedtheempiricalCDFofthekeys,noconflicts
+wouldexist.Furthermore,thehash-functionisorthogonalto
+theactualHash-maparchitectureandcanbecombinedwith
+separate chaining or any other Hash-map type.
+Forthemodel,wecanagainleveragetherecursivemodel
+architecture from the previous section. Obviously, like before,
+there exists a trade-off between the size of the index and per-
+formance, which is influenced by the model and dataset.
+Note, that how inserts, look-ups, and conflicts are handled
+is dependent on the Hash-map architecture. As a result, the
+benefits learned hash functions provide over traditional hash
+functions, which map keys to a uniformly distributed space
+depend on two key factors: (1) How accurately the model rep-
+resentstheobservedCDF.Forexample,ifthedataisgenerated
+byauniformdistribution,asimplelinearmodelwillbeable
+tolearnthegeneraldatadistribution,buttheresultinghash
+functionwillnotbebetterthananysufficientlyrandomized
+hashfunction.(2)Hashmaparchitecture:dependingonthe
+architecture, implementation details, the payload (i.e., value),
+theconflictresolutionpolicy,aswellashowmuchmoremem-
+ory(i.e.,slots)willorcanbeallocated,significantlyinfluences
+the performance. For example, for small keys and small or no
+values,traditionalhashfunctionswithCuckoohashingwill
+probably work well, whereas larger payloads or distributed
+hash maps might benefit more from avoiding conflicts, and
+thus from learned hash functions.
+4.2 Results
+We evaluated the conflict rate of learned hash functions over
+thethreeintegerdatasetsfromtheprevioussection.Asour
+modelhash-functionsweusedthe2-stageRMImodelsfrom
+theprevioussectionwith100kmodelsonthe2ndstageand
+withoutanyhiddenlayers.Asthebaselineweusedasimple
+MurmurHash3-likehash-functionandcomparedthenumber
+ofconflictsforatablewiththesamenumberofslotsasrecords.
+AscanbeseeninFigure8,thelearnedmodelscanreduce
+the number of conflicts by up to 77% over our datasets by
+learningtheempiricalCDFatareasonablecost;theexecution
+
+  
+
+
+
+  	
+ 		
+	
+
+  	 
+
+  
+ 	
+Figure 8: Reduction of Conflicts
+time is the same as the model execution time in Figure 4,
+around 25-40ns.
+Howbeneficialthereductionofconflictsisgiventhemodel
+execution time depends on the Hash-map architecture, pay-
+load,andmanyotherfactors.Forexample,ourexperiments
+(seeAppendixB)showthatforaseparatechainingHash-map
+architecturewith 20Byte recordslearned hashfunctions can
+reduce the wasted amount of storage by up to 80% at an in-
+creaseofonly13nsinlatencycomparedtorandomhashing.
+The reason why it only increases the latency by 13ns and not
+40ns is, that often fewer conflicts also yield to fewer cache
+misses,andthusbetterperformance.Ontheotherhand,for
+verysmallpayloadsCuckoo-hashingwithstandardhash-maps
+probablyremainsthebestchoice.H owever,asweshowinAp-
+pendixC,forlargerpayloadsachained-hashmapwithlearned
+hashfunctioncanbefasterthancuckoo-hashingand/ortra-
+ditional randomized hashing. Finally, we see the biggest po-
+tential for distributed settings. For example, NAM-DB [ 74]
+employs a hash function to look-up data on remote machines
+usingRDMA.Becauseoftheextremelyhighcostforeverycon-
+flict(i.e.,everyconflictrequiresanadditionalRDMArequest
+which is in the order of micro-seconds), the model execution
+time is negligible and even small reductions in the conflictrate can significantly improve the overall performance. To
+conclude, learned hash functions are independent of the used
+Hash-map architecture and depending on the Hash-map ar-
+chitecture their complexity may or may not pay off.
+5 EXISTENCE INDEX
+ThelastcommonindextypeofDBMSareexistenceindexes,
+mostimportantly Bloomfilters, aspaceefficient probabilistic
+datastructuretotestwhetheranelementisamemberofaset.
+They are commonly used to determine if a key exists on cold
+storage.Forexample,Bigtableusesthemtodetermineifakey
+is contained in an SSTable [23].
+Internally, Bloom filters use a bit array of size mandk
+hashfunctions,whicheachmapakeytooneofthe marray
+positions (see Figure9(a)). To add an element to the set, a key
+is fed to the khash-functions and the bits of the returned
+positions are set to 1. To test if a key is a member of the set,
+thekeyisagainfedintothe khashfunctionstoreceive karray
+positions. If any of the bits at those kpositions is 0, the key
+isnotamemberofaset.Inotherwords,aBloomfilterdoes
+guaranteethatthereexists nofalsenegatives,buthaspotential
+false positives.
+WhileBloomfiltersarehighlyspace-efficient,theycanstill
+occupy a significant amount of memory. For example for one
+billionrecordsroughly ≈1.76Gigabytesareneeded.ForaFPR
+of 0.01% we would require ≈2.23 Gigabytes. There have been
+severalattemptstoimprovetheefficiencyofBloomfilters[ 52],
+but the general observation remains.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+497IIIIII.PEFM
+:FT#MPPN
+੗MUFS/P
+,FZ
+:FTLFZLFZ LFZ LFZ LFZ LFZ
+.PEFM .PEFM .PEFM III	B
+ 5SBEJUJPOBM#MPPN'JMUFS*OTFSUJPO 	C
+ -FBSOFE#MPPN'JMUFS*OTFSUJPO 	D
+ #MPPN੗MUFSTBTBDMBTTJ੗DBUJPOQSPCMFN
+Figure 9: Bloom filters Architectures
+Yet,ifthereissomestructuretodeterminewhatisinside
+versusoutsidetheset,whichcanbelearned,itmightbepossi-
+bletoconstructmoreefficientrepresentations.Interestingly,
+for existence indexes for database systems, the latency and
+spacerequirementsareusuallyquitedifferentthanwhatwe
+saw before. Given the high latency to access cold storage (e.g.,
+disk or even band), we can afford more complex models while
+the main objective is to minimize the space for the index and
+thenumber offalsepositives.We outlinetwopotentialways
+to build existence indexes using learned models.
+5.1 Learned Bloom filters
+Whilebothrangeandpointindexeslearnthedistributionof
+keys,existenceindexesneedtolearnafunctionthatseparates
+keys from everything else. Stated differently, a good hashfunction for a point index is one with few collisions among
+keys,whereasagoodhashfunctionforaBloomfilterwouldbeonethathaslotsofcollisionsamongkeysandlotsofcollisions
+among non-keys, but few collisions of keys and non-keys. We
+consider below how to learn such a function fand how to
+incorporate it into an existence index.
+WhiletraditionalBloomfiltersguaranteeafalsenegative
+rate(FNR)ofzeroandaspecificfalsepositiverate(FPR)forany
+setofquerieschosena-priori[ 22],wefollowthenotionthatwe
+wanttoprovideaspecificFPRfor realisticqueries inparticular
+while maintaining a FNR of zero. That is, we measure the FPR
+over a heldout dataset of queries, as is common in evaluating
+MLsystems[ 30].Whilethesedefinitionsdiffer,webelievethe
+assumption that we can observe the distribution of queries,
+e.g.,fromhistoricallogs,holdsinmanyapplications,especially
+within databases5.
+Traditionally,existenceindexesmakenouseofthedistri-
+butionofkeysnorhowtheydifferfromnon-keys,butlearned
+Bloom filters can. For example, if our database included all in-
+tegersxfor0≤x<n,theexistenceindexcouldbecomputed
+inconstanttimeandwithalmostnomemoryfootprintbyjust
+computing f(x)≡1[0≤x<n].
+In considering the data distribution for ML purposes, we
+must consider a dataset of non-keys. In this work, we con-
+siderthecasewherenon-keyscomefromobservablehistori-
+cal queries and we assume that future queries come from the
+same distribution as historical queries. When this assumption
+doesnothold,onecoulduserandomlygeneratedkeys,non-
+keysgeneratedbyamachinelearningmodel[ 34],importance
+5We would like to thank MichaelMitzenmacher for valuable conversations in
+articulating the relationship between these definitions as well as improving the
+overall chapter through his insightful comments.weighting to directly address covariate shift [ 18], or adversar-
+ialtrainingforrobustness[ 65];weleavethisasfuturework.
+We denote the set of keys by Kand the set of non-keys by U.
+5.1.1 Bloom filters as a Classification Problem. Onewayto
+frametheexistenceindexisasabinaryprobabilisticclassifica-
+tion task. That is, we want to learn a model fthat can predict
+ifaquery xisakeyornon-key.Forexample,forstringswe
+can train a recurrent neural network (RNN) or convolutional
+neural network (CNN) [ 37,64] withD={(xi,yi=1 )|xi∈
+K}∪{(xi,yi=0 )|xi∈U }. Because this is a binary classifi-
+cation task, our neural network has a sigmoid activation to
+produceaprobabilityandistrainedtominimizethelogloss:
+L=/summationtext
+(x,y)∈Dylogf(x)+(1−y)log(1−f(x)).
+Theoutputof f(x)canbeinterpretedastheprobabilitythat
+xisakeyinourdatabase.Thus,wecanturnthemodelinto
+an existence index by choosing a threshold τabove which we
+will assume that the key exists in our database. Unlike Bloom
+filters, our model will likely have a non-zero FPR and FNR; in
+fact, as the FPR goes down, the FNR will go up. In order to
+preservethenofalsenegativesconstraintofexistenceindexes,
+we create an overflow Bloom filter. That is, we consider K−τ=
+{x∈K|f(x)<τ}tobethesetoffalsenegativesfrom fand
+createaBloom filterforthissubsetof keys.Wecanthen run
+our existence index as in Figure 9(c): if f(x)≥τ, the key is
+believed to exist; otherwise, check the overflow Bloom filter.
+Onequestionishowtoset τsothatourlearnedBloomfilter
+has the desired FPR p∗. We denote the FPR of our model by
+FPRτ≡/summationtext
+x∈˜U1(f(x)>τ)
+|˜U|where˜Uisaheld-outsetofnon-keys.
+We denote the FPR of our overflow Bloom filter by FPRB. The
+overall FPR of our system therefore is FPRO=FPRτ+( 1−
+FPRτ)FPRB[53]. Forsimplicity, weset FPRτ=FPRB=p∗
+2so
+that FPR O≤p∗. We tune τto achieve this FPR on ˜U.
+Thissetupiseffectiveinthatthelearnedmodelcanbefairly
+smallrelativetothesizeofthedata.Further,becauseBloom
+filters scale with the size of key set, the overflow Bloom filter
+willscalewiththeFNR.Wewillseeexperimentallythatthis
+combinationiseffectiveindecreasingthememoryfootprint
+of the existence index. Finally, the learned model computa-
+tion can benefit from machine learning accelerators, whereas
+traditionalBloomfilterstendtobeheavilydependentonthe
+random access latency of the memory system.
+5.1.2 Bloom filters with Model-Hashes. Analternativeap-
+proachtobuildingexistenceindexesistolearnahashfunction
+withthe goaltomaximize collisionsamongkeysand among
+non-keyswhileminimizingcollisionsofkeysandnon-keys.
+Interestingly, we can use the same probabilistic classification
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+498model as before to achieve that. That is, we can create a hash
+functiond, which maps fto a bit array of size mby scaling
+itsoutputas d=⌊f(x)∗m⌋Assuch,wecanuse dasahash
+function just like any other in a Bloom filter. This has the
+advantage of fbeing trained to map most keys to the higher
+rangeofbitpositionsandnon-keystothelowerrangeofbit
+positions (see Figure9(b)). A more detailed explanation of the
+approach is given in Appendix E.
+5.2 Results
+In order to test this idea experimentally, we explore the appli-
+cationofan existenceindexforkeepingtrack ofblacklisted
+phishing URLs. We consider data from Google’s transparency
+reportasoursetofkeystokeeptrackof.Thisdatasetconsists
+of1.7MuniqueURLs.Weuseanegativesetthatisamixtureof
+random (valid) URLs and whitelisted URLs that could be mis-
+taken forphishing pages.We splitour negativeset randomly
+intotrain,validationandtest sets.Wetrainacharacter-level
+RNN(GRU[ 24],inparticular)topredictwhichsetaURLbe-
+longsto;weset τbasedonthevalidationsetandalsoreport
+the FPR on the test set.
+AnormalBloomfilterwithadesired1%FPRrequires2.04MB.
+Weconsidera16-dimensionalGRUwitha32-dimensionalem-
+bedding for each character; this model is 0.0259MB. Whenbuilding a comparable learned index, we set
+τfor 0.5% FPR
+on the validation set; this gives a FNR of 55%. (The FPR on
+thetestsetis0.4976%,validatingthechosenthreshold.)Asde-scribedabove,thesizeofourBloomfilterscaleswiththeFNR.
+Thus, we find that our model plus the spillover Bloom filter
+uses 1.31MB, a 36% reduction in size. If we want to enforce
+an overall FPR of 0.1%, we have a FNR of 76%, which brings
+thetotalBloomfiltersizedownfrom3.06MBto2.59MB,a15%
+reduction in memory. We observe this general relationship
+inFigure10.Interestingly,weseehowdifferentsizemodels
+balance the accuracy vs. memory trade-off differently.
+Weconsiderbrieflythecasewherethereiscovariateshift
+in our query distribution that we have not addressed in the
+model. When using validation and test sets with only random
+URLs we find that we can save 60% over a Bloom filter with a
+FPR of 1%. When using validation and test sets with only the
+whitelistedURLswefindthatwecansave21%overaBloom
+filterwithaFPRof1%.Ultimately,thechoiceofnegativesetis
+application specific and covariate shift could be more directly
+addressed,buttheseexperimentsareintendedtogiveintuition
+for how the approach adapts to different situations.
+Clearly, the more accurate our model is, the better the sav-
+ings in Bloom filter size. One interesting property of this is
+thatthereisnoreasonthatourmodelneedstousethesame
+features as the Bloom filter. For example, significant research
+has worked on using ML to predict if a webpage is a phish-
+ingpage[ 10,15].AdditionalfeatureslikeWHOISdataorIP
+informationcouldbeincorporatedinthemodel,improvingac-
+curacy, decreasing Bloom filter size, and keeping the property
+of no false negatives.
+Further, we give additional results following the approach
+in Section 5.1.2 in Appendix E..FNPSZ'PPUQSJOU	.FHBCZUFT
+#MPPN'JMUFS
+8&8&
+8&
+
+'BMTF1PTJUJWF3BUF	
+Figure10:LearnedBloomfilterimprovesmemoryfoot-
+printatawiderangeofFPRs.(Here WistheRNNwidth
+andEis the embedding size for each character.)
+6 RELATED WORK
+The idea of learned indexes builds upon a wide range of re-
+search in machine learning and indexing techniques. In the
+following, we highlight the most important related areas.
+B-Trees and variants: Over the last decades a variety
+of different index structures have been proposed [ 36], such
+as B+-trees [ 17] for disk based systems and T-trees [ 46]o r
+balanced/red-blacktrees[ 16,20]forin-memorysystems.As
+the original main-memory trees had poor cache behavior, sev-
+eral cache conscious B+-tree variants were proposed, such as
+the CSB+-tree [ 58]. Similarly, there has been work on making
+use of SIMD instructions such as FAST [ 44] or even taking
+advantageofGPUs[ 43,44,61].Moreover,manyofthese(in-
+memory) indexes are able to reduce their storage-needs by
+usingoffsetsratherthanpointersbetweennodes.Thereexists
+also a vast array of research on index structures for text, such
+astries/radix-trees[ 19,31,45],orotherexoticindexstructures,
+which combine ideas from B-Trees and tries [48].
+However, all of these approaches are orthogonal to the
+idea of learned indexes as none of them learn from the data
+distributiontoachieveamorecompactindexrepresentation
+or performance gains. At the same time, like with our hybrid
+indexes, it might be possible to more tightly integrate theexisting hardware-conscious index strategies with learned
+models for further performance gains.
+Since B+-trees consume significant memory, there has also
+been a lot of work in compressing indexes, such as prefix/suf-
+fix truncation, dictionary compression, key normalization [ 33,
+36,55], or hybrid hot/cold indexes [ 75]. However, we pre-
+sented a radical different way to compress indexes, which—
+dependent on the data distribution—is able to achieve orders-
+of-magnitude smaller indexes and faster look-up times andpotentially even changes the storage complexity class (e.g.,
+O(n)t oO(1) ). Interestingly though, some of the existing com-
+pressiontechniquesarecomplimentarytoourapproachand
+could help to further improve the efficiency. For example, dic-
+tionary compression can be seen as a form of embedding (i.e.,
+representing a string as a unique integer).
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+499Probably most related to this paper are A-Trees [ 32], BF-
+Trees[13],andB-Treeinterpolationsearch[ 35].BF-Treesuses
+a B+-tree to store information about a region of the dataset,
+butleafnodesareBloomfiltersanddonotapproximatethe
+CDF. In contrast, A-Trees usepiece-wise linear functions to
+reducethenumberofleaf-nodesinaB-Tree,and[ 35]proposes
+to use interpolation search within a B-Tree page. However,
+learnedindexesgomuchfurtherandproposetoreplacethe
+entire index structure using learned models.
+Finally, sparse indexes like Hippo [ 73], Block Range In-
+dexes [63], and Small Materialized Aggregates (SMAs) [ 54] all
+store information about value ranges but again do not take
+advantageoftheunderlyingpropertiesofthedatadistribution.
+LearningHashFunctionsforANNIndexes: Therehas
+beenalotofresearchonlearninghashfunctions[ 49,59,67,
+68]. Most notably, there has been work on learning locality-
+sensitive hash (LSH) functions to build Approximate Nearest
+Neighborhood(ANN)indexes.Forexample,[ 40,66,68]explore
+theuseofneuralnetworksasahashfunction,whereas[ 69]
+eventriestopreservetheorderofthemulti-dimensionalinput
+space. However, the general goal of LSH is to group similar
+itemsintobucketstosupportnearestneighborhoodqueries,
+usuallyinvolvinglearningapproximatesimilaritymeasuresinhigh-dimensionalinputspaceusingsomevariantofhamming
+distances.Thereisnodirectwaytoadaptpreviousapproaches
+to learn the fundamental data structures we consider, and it is
+not clear whether they can be adapted.
+Perfect Hashing: Perfect hashing [ 26] is very related to
+ouruseofmodelsforHash-maps.LikeourCDFmodels,per-
+fecthashingtriestoavoidconflicts.However,inallapproaches
+of which we are aware, learning techniques have not been
+considered, and the size of the function grows with the sizeof the data. In contrast, learned hash functions can be inde-
+pendentofthesize.For example,alinearmodelformapping
+everyotherintegerbetween0and200Mwouldnotcreateany
+conflictsandisindependentofthesizeofthedata.Inaddition,
+perfect hashing is also not useful for B-Trees or Bloom filters.
+Bloomfilters: Finally,ourexistenceindexesdirectlybuilds
+upon the existing work in Bloom filters [ 11,29]. Yet again our
+worktakesadifferentperspectiveontheproblembyproposing
+a Bloom filter enhanced classification model or using models
+as special hash functions with a very different optimization
+goal than the hash-models we created for Hash-maps.
+SuccinctDataStructures: Thereexistsaninterestingcon-
+nection between learned indexes and succinct data structures,
+especiallyrank-selectdictionariessuchaswavelettrees[ 38,
+39].However,manysuccinctdatastructuresfocusonH0en-
+tropy(i.e.,thenumberofbitsthatarenecessarytoencodeeach
+elementintheindex),whereaslearnedindexestrytolearnthe
+underlying data distribution to predict the position of each el-
+ement.Thus,learnedindexesmightachieveahighercompres-
+sion rate than H0 entropy potentially at the cost of slower op-
+erations. Furthermore, succinct data structures normally have
+to be carefully constructed for each use case, whereas learned
+indexes “automate” this process through machine learning.Yet, succinct data structures might provide a framework to
+further study learned indexes.
+ModelingCDFs: Our models for both range and point in-
+dexes are closely tied to models of the CDF. Estimating the
+CDF is non-trivial and has been studied in the machine learn-
+ingcommunity[ 50]withafewapplicationssuchasranking
+[42].HowtomosteffectivelymodeltheCDFisstillanopen
+question worth further investigation.
+Mixture ofExperts: Our RMI architecture follows a long
+lineofresearchonbuildingexpertsforsubsetsofthedata[ 51].
+With the growth of neural networks, this has become more
+commonanddemonstratedincreasedusefulness[ 62].Aswe
+see in our setting, it nicely lets us to decouple model size and
+modelcomputation,enablingmorecomplexmodelsthatare
+not more expensive to execute.
+7 CONCLUSION AND FUTURE WORK
+Wehaveshownthatlearnedindexescanprovidesignificant
+benefits by utilizing the distribution of data being indexed.
+This opens the door to many interesting research questions.
+Other ML Models: While our focus was on linear models
+andneuralnetswithmixtureofexperts,thereexistmanyother
+MLmodeltypesandwaystocombinethemwithtraditional
+data structures, which are worth exploring.
+Multi-DimensionalIndexes: Arguablythemostexciting
+research direction for the idea of learned indexes is to extend
+themtomulti-dimensionalindexes.Models,especiallyNNs,
+are extremely good at capturing complex high-dimensional
+relationships.Ideally,thismodelwouldbeabletoestimatethe
+positionofallrecordsfilteredbyanycombinationofattributes.
+Beyond Indexing: Learned Algorithms Maybesurpris-
+ingly, a CDF model has also the potential to speed-up sorting
+andjoins,notjustindexes.Forinstance,thebasicidea tospeed-
+upsortingistouseanexistingCDFmodel Ftoputtherecords
+roughly in sorted order and then correct the nearly perfectly
+sorted data, for example, with insertion sort.
+GPU/TPUs Finally,asmentionedseveraltimesthroughout
+thispaper,GPU/TPUswillmaketheideaoflearnedindexes
+evenmorevaluable.Atthesametime,GPU/TPUsalsohave
+theirownchallenges,mostimportantlythehighinvocation
+latency. While it is reasonable to assume that probably alllearned indexes will fit on the GPU/TPU because of the ex-
+ceptionalcompressionratioasshownbefore,itstillrequires
+2-3 micro-seconds to invoke any operation on them. At thesame time, the integration of machine learning accelerators
+with the CPU is getting better [ 4,6] and with techniques like
+batching requests the cost of invocation can be amortized, so
+thatwedonotbelievetheinvocationlatencyisarealobstacle.
+In summary, we have demonstrated that machine
+learnedmodelshavethepotentialtoprovidesignificantbenefitsoverstate-of-the-artindexes,andwebelievethis
+is a fruitful direction for future research.
+Acknowledgements: WewouldliketothankMichaelMitzenmacher,
+ChrisOlston,JonathanBischofandmanyothersatGooglefortheir
+helpful feedback during the preparation of this paper.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+500REFERENCES
+[1]Database architects blog: The case for b-tree index
+structures. http://databasearchitects.blogspot.de/2017/12/
+the-case-for-b-tree-index-structures.html.
+[2]Google’s sparsehash documentation. https://github.com/sparsehash/
+sparsehash/blob/master/src/sparsehash/sparse_hash_map.
+[3]An in-depth look at google’s first tensor processing unit
+(tpu). https://cloud.google.com/blog/big-data/2017/05/
+an-in-depth-look-at-googles-first-tensor-processing-unit-tpu.
+[4]Intel Xeon Phi. https://www.intel.com/content/www/us/en/products/
+processors/xeon-phi/xeon-phi-processors.html.
+[5]Moore Law is Dead but GPU will get 1000X faster
+by 2025. https://www.nextbigfuture.com/2017/06/
+moore-law-is-dead-but-gpu-will-get-1000x-faster-by-2025.html.
+[6]NVIDIANVLinkHigh-SpeedInterconnect. http://www.nvidia.com/object/
+nvlink.html.
+[7]Stanford DAWN cuckoo hashing. https://github.com/stanford-futuredata/
+index-baselines.
+[8]Trying to speed up binary search. http://databasearchitects.blogspot.com/
+2015/09/trying-to-speed-up- binary-search.html.
+[9]M.Abadi,P.Barham,J.Chen,Z.Chen,A.Davis,J.Dean,M.Devin,S.Ghe-
+mawat, G. Irving, M. Isard, et al. Tensorflow: A system for large-scale
+machine learning. In OSDI, volume 16, pages 265–283, 2016.
+[10]S. Abu-Nimeh, D. Nappa, X. Wang, and S. Nair. A comparison of machine
+learningtechniquesfor phishingdetection. In eCrime,pages60–69, 2007.
+[11]K. Alexiou, D. Kossmann, and P.-A. Larson. Adaptive range filters for cold
+data:Avoidingtripstosiberia. Proc.VLDBEndow.,6(14):1714–1725,Sept.
+2013.
+[12]M. Armbrust, A. Fox, D. A. Patterson, N. Lanham, B. Trushkowsky,
+J.Trutna,andH.Oh. SCADS:scale-independentstorageforsocialcom-
+puting applications. In CIDR, 2009.
+[13]M.AthanassoulisandA.Ailamaki. BF-tree:ApproximateTreeIndexing.
+InVLDB, pages 1881–1892, 2014.
+[14]Performance comparison: linear search vs binary
+search. https://dirtyhandscoding.wordpress.com/2017/08/25/
+performance-comparison-linear-search-vs-binary-search/.
+[15]R.B.Basnet,S.Mukkamala,andA.H.Sung. Detectionofphishingattacks:
+A machine learning approach. Soft Computing Applications in Industry,
+226:373–383, 2008.
+[16]R. Bayer. Symmetric binary b-trees: Data structure and maintenance
+algorithms. Acta Inf., 1(4):290–306, Dec. 1972.
+[17]R.BayerandE.McCreight. Organizationandmaintenanceoflargeordered
+indices. In SIGFIDET (Now SIGMOD), pages 107–141, 1970.
+[18]S. Bickel, M. Brückner, and T. Scheffer. Discriminative learning under
+covariate shift. Journal of Machine Learning Research, 10(Sep):2137–2155,
+2009.
+[19]M. Böhm, B. Schlegel, P. B. Volk, U. Fischer, D. Habich, and W. Lehner.
+Efficientin-memoryindexingwithgeneralizedprefixtrees. In BTW,pages
+227–246, 2011.
+[20]J.BoyarandK.S.Larsen. Efficientrebalancingofchromaticsearchtrees.
+Journal of Computer and System Sciences, 49(3):667 – 682, 1994. 30th IEEE
+Conference on Foundations of Computer Science.
+[21]M.Brantner,D.Florescu,D.A.Graf,D.Kossmann,andT.Kraska. Building
+a database on S3. In SIGMOD, pages 251–264, 2008.
+[22]A. Broder and M. Mitzenmacher. Network applications of bloom filters: A
+survey.Internet mathematics, 1(4):485–509, 2004.
+[23] F. Chang,J. Dean,S.Ghemawat, W.C. Hsieh,D. A.Wallach,M. Burrows,
+T.Chandra,A.Fikes,andR.Gruber. Bigtable:Adistributedstoragesystem
+for structured data (awarded best paper!). In OSDI, pages 205–218, 2006.
+[24]K. Cho, B. van Merrienboer, Ç. Gülçehre, D. Bahdanau, F. Bougares,
+H.Schwenk,andY.Bengio. Learningphraserepresentations usingRNN
+encoder-decoder for statistical machine translation. In EMNLP, pages
+1724–1734, 2014.
+[25]A.Crotty,A.Galakatos,K.Dursun,T.Kraska,C.Binnig,U.Çetintemel,and
+S.Zdonik. Anarchitectureforcompilingudf-centricworkflows. PVLDB,
+8(12):1466–1477, 2015.
+[26]M.Dietzfelbinger,A.Karlin,K.Mehlhorn,F.MeyerauFderHeide,H.Rohn-
+ert, andR. E.Tarjan. Dynamic perfecthashing:Upper andlower bounds.
+SIAM Journal on Computing, 23(4):738–761, 1994.
+[27]J.Duchi,E.Hazan,andY.Singer. Adaptivesubgradientmethodsforonlinelearningandstochasticoptimization. JournalofMachineLearningResearch,
+12(Jul):2121–2159, 2011.
+[28]A.Dvoretzky,J.Kiefer,andJ.Wolfowitz. Asymptoticminimaxcharacterofthesampledistributionfunctionandoftheclassicalmultinomialestimator.
+The Annals of Mathematical Statistics, pages 642–669, 1956.[29]B.Fan,D.G.Andersen,M.Kaminsky,andM.D.Mitzenmacher. Cuckoo
+filter: Practically better than bloom. In CoNEXT, pages 75–88, 2014.
+[30]T. Fawcett. An introduction to roc analysis. Pattern recognition letters,
+27(8):861–874, 2006.
+[31] E. Fredkin. Trie memory. Commun. ACM, 3(9):490–499, Sept. 1960.
+[32]A. Galakatos, M. Markovitch, C. Binnig, R. Fonseca, and T. Kraska. A-tree:
+A bounded approximate index structure. CoRR, abs/1801.10207, 2018.
+[33]J.Goldstein,R.Ramakrishnan,andU.Shaft. CompressingRelationsand
+Indexes. In ICDE, pages 370–379, 1998.
+[34]I.Goodfellow,J.Pouget-Abadie,M.Mirza,B.Xu,D.Warde-Farley,S.Ozair,
+A.Courville,andY.Bengio. Generativeadversarialnets. In NIPS,pages
+2672–2680, 2014.
+[35]G.Graefe. B-treeindexes,interpolationsearch,andskew. In DaMoN,2006.
+[36]G.GraefeandP.A.Larson. B-treeindexesandCPUcaches. In ICDE,pages
+349–358, 2001.
+[37]A.Graves. Generatingsequenceswithrecurrentneuralnetworks. arXiv
+preprint arXiv:1308.0850, 2013.
+[38] R. Grossi,A. Gupta,andJ. S.Vitter. High-orderentropy-compressed text
+indexes. In SODA, pages 841–850. Society for Industrial and Applied
+Mathematics, 2003.
+[39]R. Grossi and G. Ottaviano. The wavelet trie: Maintaining an indexed
+sequence of strings in compressed space. In PODS, pages 203–214, 2012.
+[40]J. Guo and J. Li. CNN based hashing for image retrieval. CoRR,
+abs/1509.01354, 2015.
+[41]M. Gupta, A. Cotter, J. Pfeifer, K. Voevodski, K. Canini, A. Mangylov,
+W.Moczydlowski,andA.VanEsbroeck. Monotoniccalibratedinterpolated
+look-uptables. TheJournalofMachineLearningResearch,17(1):3790–3836,
+2016.
+[42]J. C. Huang and B. J. Frey. Cumulative distribution networks and the
+derivative-sum-productalgorithm:Modelsandinferenceforcumulative
+distribution functions on graphs. J. Mach. Learn. Res., 12:301–348, Feb.
+2011.
+[43] K. Kaczmarski. B+-Tree Optimized for GPGPU. 2012.
+[44]C. Kim, J. Chhugani, N. Satish, E. Sedlar, A. D. Nguyen, T. Kaldewey, V. W.
+Lee,S.A.Brandt,andP.Dubey. Fast:Fastarchitecturesensitivetreesearch
+on modern cpus and gpus. In SIGMOD, pages 339–350, 2010.
+[45]T. Kissinger, B. Schlegel, D. Habich, and W. Lehner. Kiss-tree: Smart latch-
+freein-memoryindexingonmodernarchitectures. In DaMoN,pages16–23,
+2012.
+[46]T.J.LehmanandM.J.Carey. Astudyofindexstructuresformainmemory
+database management systems. In VLDB, pages 294–303, 1986.
+[47] V. Leis. FAST source. http://www-db.in.tum.de/âĹĳleis/index/fast.cpp.[48]
+V. Leis, A. Kemper, and T. Neumann. The adaptive radix tree: Artful
+indexing for main-memory databases. In ICDE, pages 38–49, 2013.
+[49]W. Litwin. Readings in database systems. chapter Linear Hashing: A New
+Tool for File and Table Addressing., pages 570–581. Morgan Kaufmann
+Publishers Inc., 1988.
+[50]M.Magdon-IsmailandA.F.Atiya. Neuralnetworksfordensityestimation.
+InM.J.Kearns,S.A.Solla,andD.A.Cohn,editors, NIPS,pages522–528.
+MIT Press, 1999.
+[51]D.J.MillerandH.S.Uyar. Amixtureofexpertsclassifierwithlearning
+based on both labelled and unlabelled data. In NIPS, pages 571–577, 1996.
+[52]M. Mitzenmacher. Compressed bloom filters. In PODC, pages 144–150,
+2001.
+[53]M.Mitzenmacher. Amodelforlearnedbloomfiltersandrelatedstructures.
+arXiv preprint arXiv:1802.00884, 2018.
+[54]G.Moerkotte. SmallMaterializedAggregates:ALightWeightIndexStruc-
+ture for Data Warehousing. In VLDB, pages 476–487, 1998.
+[55]T. Neumann and G. Weikum. RDF-3X: A RISC-style Engine for RDF. Proc.
+VLDB Endow., pages 647–659, 2008.
+[56]OpenStreetMap database ©OpenStreetMap contributors. https://aws.
+amazon.com/public-datasets/osm.
+[57]R.PaghandF.F.Rodler. Cuckoohashing. JournalofAlgorithms,51(2):122–
+144, 2004.
+[58]J. Rao and K. A. Ross. Making b+- trees cache conscious in main memory.
+InSIGMOD, pages 475–486, 2000.
+[59]S. Richter, V. Alvarez, and J. Dittrich. A seven-dimensional analysis ofhashing methods and its implications on query processing. Proc. VLDB
+Endow., 9(3):96–107, Nov. 2015.
+[60]D. G. Severance and G. M. Lohman. Differential files: Their application to
+the maintenance of large data bases. In SIGMOD, pages 43–43, 1976.
+[61]A. Shahvarani and H.-A. Jacobsen. A hybrid b+-tree as solution for in-memory indexing on cpu-gpu heterogeneous computing platforms. In
+SIGMOD, pages 1523–1538, 2016.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+501[62]N. Shazeer, A. Mirhoseini, K. Maziarz, A. Davis, Q. Le, G. Hinton, and
+J. Dean. Outrageously large neural networks: The sparsely-gated mixture-
+of-experts layer. arXiv preprint arXiv:1701.06538, 2017.
+[63]M.StonebrakerandL.A.Rowe. TheDesignofPOSTGRES. In SIGMOD,
+pages 340–355, 1986.
+[64]I. Sutskever, O. Vinyals, and Q. V. Le. Sequence to sequence learning with
+neural networks. In NIPS, pages 3104–3112, 2014.
+[65]F. Tramèr, A. Kurakin, N. Papernot, D. Boneh, and P. McDaniel. Ensemble
+adversarialtraining:Attacksanddefenses. arXivpreprintarXiv:1705.07204,
+2017.
+[66]M.TurcanikandM.Javurek. Hashfunctiongenerationbyneuralnetwork.
+InNTSP, pages 1–5, Oct 2016.
+[67]J. Wang, W. Liu, S. Kumar, and S. F. Chang. Learning to hash for indexing
+big data;a survey. Proceedings of the IEEE, 104(1):34–57, Jan 2016.
+[68]J. Wang, H. T. Shen, J. Song, and J. Ji. Hashing for similarity search: A
+survey.CoRR, abs/1408.2927, 2014.
+[69]J. Wang, J. Wang, N. Yu, and S. Li. Order preserving hashing for approxi-
+mate nearest neighbor search. In MM, pages 133–142, 2013.
+[70]Y.Wu,M.Schuster,Z.Chen,Q.V.Le,M.Norouzi,W.Macherey,M.Krikun,
+Y. Cao, Q. Gao, K. Macherey, et al. Google’s neural machine translation
+system: Bridging the gap between human and machine translation. arXiv
+preprint arXiv:1609.08144, 2016.
+[71]S. You, D. Ding, K. Canini, J. Pfeifer, and M. Gupta. Deep lattice networks
+and partial monotonic functions. In NIPS, pages 2985–2993, 2017.
+[72]Y. You, Z. Zhang, C. Hsieh, J. Demmel, and K. Keutzer. Imagenet training
+in minutes. CoRR, abs/1709.05011, 2017.
+[73]J. Yu and M. Sarwat. Two Birds, One Stone: A Fast, Yet Lightweight,
+Indexing Scheme for Modern Database Systems. In VLDB, pages 385–396,
+2016.
+[74]E. Zamanian, C. Binnig, T. Kraska, and T. Harris. The end of a myth:
+Distributed transaction can scale. PVLDB, 10(6):685–696, 2017.
+[75]H. Zhang, D. G. Andersen, A. Pavlo, M. Kaminsky, L. Ma, and R. Shen.
+Reducing the storage overhead of main-memory OLTP databases with
+hybrid indexes. In SIGMOD, pages 1567–1581, 2016.
+A THEORETICAL ANALYSIS OF SCALING
+LEARNED RANGE INDEXES
+One advantage of framing learned range indexes as modeling
+the cumulative distribution function (CDF) of the data is that
+wecan buildon thelongresearch literatureon modelingthe
+CDF.Significantresearchhasstudiedtherelationshipbetween
+a theoretical CDF F(x) and the empirical CDF of data sampled
+fromF(x).Weconsiderthecasewherewehavesampledi.i.d. N
+datapoints, Y, from some distribution, and we will use ˆFN(x)
+to denote the empirical cumulative distribution function:
+ˆFN(x)=/summationtext
+y∈Y1y≤x
+N. (2)
+Onetheoreticalquestionaboutlearnedindexesis:howwell
+do they scale with the size of the data N? In our setting, we
+learna model F(x)toapproximatethe distributionof ourdata
+ˆFN(x). Here, we assume we know the distribution F(x) that
+generated the data and analyze the error inherent in the data
+beingsampledfromthatdistribution6.Thatis,weconsiderthe
+error between the distribution of data ˆFN(x) and our model
+ofthedistribution F(x).Because ˆFN(x)isabinomialrandom
+variable with mean F(x), we find that the expected squared
+error between our data and our model is given by
+E/bracketleftbigg/parenleftBig
+F(x)−ˆFN(x)/parenrightBig2/bracketrightbigg
+=F(x)(1−F(x))
+N. (3)
+In our application the look-up time scales with the average
+error in the number of positions in the sorted data; that is, we
+6LearningF(x)canimproveorworsentheerror,butwetakethisasareasonable
+assumption for some applications, such as data keyed by a random hash.  	 	  
+	
+   
+  
+	
+   
+  
+	
+   
+  
+	
+   
+  
+	
+   
+  
+	
+   
+  
+	
+   
+  
+	
+   
+  
+	
+   
+    
+ 
+  
+ 
+ 
+ 
+  
+
+
+Figure 11: Model vs Random Hash-map
+areconcernedwiththeerrorbetweenourmodel NF(x)andthe
+key position NˆFN(x). With some minor manipulation of Eq.
+(3),wefindthattheaverageerrorinthepredictedpositions
+grows at a rate of O(√
+N). Note that this sub-linear scaling
+in error for a constant-sized model is an improvement over
+the linear scaling achieved by a constant-sized B-Tree. This
+providespreliminaryunderstandingofthescalabilityofour
+approachanddemonstrateshowframingindexingaslearning
+the CDF lends itself well to theoretical analysis.
+B SEPARATED CHAINING HASH-MAP
+We evaluated the potential of learned hash functions using a
+separatechainingHash-map;recordsarestoreddirectlywithinanarrayandonlyinthecaseofaconflictistherecordattached
+tothelinked-list.Thatiswithoutaconflictthereisatmostonecachemiss.Onlyinthecasethatseveralkeysmaptothesameposition,additionalcache-missesmightoccur.Wechoosethat
+design as it leads to the best look-up performance even forlarger payloads. For example, we also tested a commercial-
+grade dense Hash-map with a bucket-based in-place overflow
+(i.e.,theHash-mapisdividedintobucketstominimizeover-
+head and uses in-place overflow if a bucket is full [ 2]). While
+it is possible to achieve a lower footprint using this technique,
+we found that it is also twice as slow as the separate chaining
+approach.Furthermore,at80%ormorememoryutilizationthe
+dense Hash-maps degrade further in performance. Of course
+manyfurther(orthogonal)optimizationsarepossibleandby
+nomeansdoweclaimthatthisisthemostmemoryorCPU
+efficient implementation of a Hash-map. Rather we aim to
+demonstrate the general potential of learned hash functions.
+As the baseline for this experiment we used our Hash-map
+implementation with a MurmurHash3-like hash-function. As
+thedataweusedthethreeintegerdatasetsfromSection3.7
+andasthemodel-basedHash-mapthe2-stageRMImodelwith
+100kmodelsonthe2ndstageandnohiddenlayersfromthe
+same section. For all experiments we varied the number of
+available slots from 75% to 125% of the data. That is, with 75%
+there are 25% less slots in the Hash-map than data records.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+502Forcing less slots than the data size, minimizes the empty
+slots within the Hash-map at the expense of longer linked
+lists.Howeve r,forHash-mapswestorethefullrecords,which
+consistofa64bitkey,64bitpayload,anda32bitmeta-datafield
+for delete flags, version nb, etc. (so a record has a fixed length
+of 20 Bytes); note that our chained hash-map adds another
+32bit pointer, making it a 24Byte slot.
+TheresultsareshowninFigure11,listingtheaveragelook-
+up time, the number of empty slots in GB and the space im-
+provement as a factor of using a randomized hash function.
+Note,thatincontrasttotheB-Treeexperiments,we doinclude
+the data size. The main reason is that in order to enable 1
+cache-misslook-ups,thedataitselfhastobeincludedinthe
+Hash-map,whereasintheprevioussectionweonlycounted
+the extra index overhead excluding the sorted array itself.
+As can be seen in Figure 11, the index with the model hash
+functionoverallhassimilarperformancewhileutilizingthe
+memory better. For example, for the map dataset the model
+hash function only “wastes” 0.18GB in slots, an almost 80%
+reductioncomparedtousingarandomhashfunction.Obvi-
+ously,themomentweincreasetheHash-mapinsizetohave
+25% more slots, the savings are not as large, as the Hash-map
+is also able to better spread out the keys. Surprisingly if we
+decreasethespaceto75%ofthenumberofkeys,thelearned
+Hash-map still has an advantage because of the still prevalent
+birthday paradox.
+C HASH-MAP COMPARISON AGAINST
+ALTERNATIVE BASELINES
+InadditiontotheseparatechainingHash-maparchitecture,we
+alsocomparedlearnedpointindexesagainstfouralternative
+Hash-map architectures and configurations:
+AVX Cuckoo Hash-map: We used an AVX optimized
+Cuckoo Hash-map from [7].
+Commercial Cuckoo Hash-map: The implementation
+of[7]ishighlytuned,butdoesnothandleallcornercases.We
+therefore also compared against a commercially used Cuckoo
+Hash-map.
+In-place chained Hash-map with learned hash func-
+tions:Onesignificantdownsideofseparatechainingisthatit
+requires additionalmemoryfor the linked list.Asan alterna-
+tive, we implemented a chained Hash-map, which uses a two
+passalgorithm:inthefirstpass,thelearnedhashfunctionis
+usedtoputitemsintoslots.Ifaslotisalreadytaken,theitemis
+skipped. Afterwards we use a separate chaining approach for
+everyskippeditemexceptthatweusetheremainingfreeslots
+with offsets as pointers for them. As a result, the utilization
+canbe100%(recall,wedonotconsiderinserts)andthequality
+of the learned hash function can only make an impact on the
+performance not the size: the fewer conflicts, the fewer cache
+misses.Weusedasimplesinglestagemulti-variatemodelas
+the learned hash function and implemented the Hash-map
+including the model outside of our benchmarking framework
+to ensure a fair comparison.Type Time (ns) Utilization
+AVX Cuckoo, 32-bit value 31ns 99%
+AVX Cuckoo, 20 Byte record 43ns 99%
+Comm. Cuckoo, 20Byte record 90ns 95%
+In-place chained Hash-map
+with learned hash functions,
+record35ns 100%
+Table 1: Hash-map alternative baselines
+LikeinSectionBourrecordsare20Byteslargeandconsist
+of a 64bit key, 64bit payload, and a 32bit meta-data field ascommonly found in real applications (e.g., for delete flags,
+versionnumbers,etc.).ForallHash-maparchitectureswetried
+to maximize utilization and used records, except for the AVX
+Cuckoo Hash-map where we also measured the performance
+for32bitvalues.Asthedatasetweusedthelog-normaldata
+and the same hardware as before. The results are shown in
+Table 1.
+The results for the AVX cuckoo Hash-map show that the
+payloadhasasignificantimpactontheperformance.Going
+from8Byteto20Bytedecreasestheperformancebyalmost
+40%.Furthermore,thecommercialimplementationwhichhan-
+dlesallcornercasesbutisnotveryAVXoptimizedslowsdown
+thelookupbyanotherfactorof2.Incontrast,ourlearnedhash
+functions with in-place chaining can provide better lookup
+performance than even the cuckoo Hash-map for our records.
+The main take-aways from this experiment is that learned
+hash functions can be used with different Hash-map architec-
+turesandthatthebenefitsanddisadvantageshighlydepend
+on the implementation, data and workload.
+D FUTURE DIRECTIONS FOR LEARNED
+B-TREES
+In the main part of the paper, we have focused on index-
+structuresforread-only,in-memorydatabasesystems.Here
+weoutlinehowtheideaoflearnedindexstructurescouldbe
+extended in the future.
+D.1 Inserts and Updates
+Onfirstsight,insertsseemtobetheAchillesheeloflearnedin-dexesbecauseofthepotentiallyhighcostforlearningmodels,
+but yet again learned indexes might have a significant ad-
+vantage for certain workloads. In general we can distinguish
+between two types of inserts: (1) appendsand (2)inserts in the
+middlelike updating a secondary index on the customer-id
+over an order table.
+Let’sforthemomentfocusonthefirstcase:appends.For
+example, it is reasonable to assume that for an index over the
+timestampsofweb-logs,likeinourpreviousexperiments,most
+ifnotallinsertswillbeappendswithincreasingtimestamps.
+Now, let us further assume that our model generalizes andis able to learn the patterns, which also hold for the future
+data.Asaresult,updatingtheindexstructurebecomesan O(1)
+operation;itisasimpleappendandnochangeofthemodel
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+503itselfisneeded,whereasaB-Treerequires O(logn)operations
+to keep the B-Tree balance. A similar argument can also be
+madeforinsertsinthemiddle,however,thosemightrequire
+tomovedataorreservespacewithinthedata,sothatthenew
+items can be put into the right place.
+Obviously, this observation also raises several questions.
+First,thereseemstobeaninterestingtrade-offinthegener-
+alizabilityofthemodelandthe“lastmile”performance;the
+better the “last mile” prediction, arguably, the more the model
+is overfitting and less able to generalize to new data items.
+Second,whathappensifthedistributionchanges?Canit
+bedetected,andisitpossibletoprovidesimilarstrongguaran-
+teesas B-Treeswhich alwaysguarantee O(loдn)look-upand
+insertioncosts?Whileansweringthisquestiongoesbeyond
+the scope of this paper, we believe that it is possible for cer-
+tain models to achieve it. More importantly though, machine
+learning offers new ways to adapt the models to changes in
+the data distribution, such as online learning, which might be
+moreeffectivethantraditionalB-Treebalancingtechniques.
+Exploring them also remains future work.
+Finally, it should be pointed out that there always exists
+amuchsimpleralternativetohandlinginsertsbybuildinga
+delta-index[ 60].Allinsertsarekeptinbufferandfromtime
+to time merged with a potential retraining of the model. This
+approach is already widely used, for example in Bigtable [ 23]
+and many other systems, and was recently explored in [ 32]
+for learned indexes.
+D.2 Paging
+Throughoutthis section weassumed thatthe data,either the
+actual records or the <key,pointer> pairs, are stored in one
+continuousblock.However,especiallyforindexesoverdata
+stored on disk, it is quite common to partition the data into
+larger pages that are stored in separate regions on disk. To
+that end, our observation that a model learns the CDF no
+longer holds true as pos=Pr(X<Key)∗Nis violated. In the
+following we outline several options to overcome this issue:
+LeveragingtheRMIstructure:TheRMIstructurealready
+partitions the space into regions. With small modifications
+tothelearningprocess,wecanminimizehowmuchmodels
+overlap in the regions they cover. Furthermore, it might be
+possible to duplicate any records which might be accessed by
+more than one model.
+Another option is to have an additional translation table in
+the form of <first_key, disk-position> . With the trans-
+lationtabletherestoftheindexstructureremainsthesame.
+However, this idea will work best if the disk pages are very
+large.Atthesametimeitispossibletousethepredictedpo-
+sitionwiththemin-andmax-errortoreducethenumberof
+bytes which have to be read from a large page, so that the
+impact of the page size might be negligible.
+Withmorecomplexmodels,itmightactuallybepossible
+to learn the actual pointers of the pages. Especially if a file-
+systemisusedtodeterminethepageondiskwithasystematicnumberingoftheblocksondisk(e.g., block1,...,block100 )
+the learning process can remain the same.
+Obviously,moreinvestigationisrequiredtobetterunder-
+standtheimpactoflearnedindexesfordisk-basedsystems.At
+thesametimethesignificantspacesavings aswellasspeed
+benefits make it a very interesting avenue for future work.
+E FURTHER BLOOM FILTER RESULTS
+In Section 5.1.2, we propose an alternative approach to a
+learned Bloom filter where the classifier output is discretized
+and used as an additional hash function in the traditional
+Bloomfiltersetup.Preliminaryresultsdemonstratethatthis
+approachinsomecasesoutperformstheresultslistedinSec-
+tion5.2,butastheresultsdependonthediscretizationscheme,
+further analysis is worthwhile. We describe below these addi-
+tional experiments.
+Asbefore,weassumewehaveamodelmodel f(x)→[0,1]
+that maps keys to the range [0 ,1]. In this case, we allocate
+mbits for a bitmap Mwhere we set M[⌊mf(x)⌋] = 1 for
+all inserted keys x∈K. We can then observe the FPR by
+observingwhatpercentageofnon-keysinthevalidationset
+map to a location in the bitmap with a value of 1, i.e. FPRm≡/summationtext
+x∈˜UM[⌊f(x)m⌋]
+|˜U|. In addition, we have a traditional Bloom
+filter with false positive rate FPRB. We say that a query q
+is predicted to be a key if M[⌊f(q)m⌋] = 1 and the Bloom
+filter also returns that it is a key. As such, the overall FPR
+ofthesystemis FPRm×FPRB;wecandeterminethesizeof
+the traditional Bloom filter based on it’s false positive rate
+FPRB=p∗
+FPRmwherep∗is the desired FPR for the whole
+system.
+AsinSection5.2,wetestourlearnedBloomfilterondata
+fromGoogle’stransparencyreport.WeusethesamecharacterRNNtrainedwitha16-dimensionalwidthand32-dimensional
+characterembeddings.Scanningoverdifferentvaluesfor m,
+we can observe the total size of the model, bitmap for the
+learned Bloom filter, and the traditional Bloom filter. For a
+desired total FPR p∗=0.1%, we find that setting m= 1000000
+gives a total size of 2.21MB, a 27.4% reduction in memory,
+compared to the 15% reduction following the approach in
+Section 5.1.1 and reported in Section 5.2. For a desired total
+FPRp∗= 1% we get a total size of 1.19MB, a 41% reduction in
+memory,comparedtothe36%reductionreportedinSection
+5.2.
+These results are a significant improvement over those
+shown in Section 5.2. However, typical measures of accuracy
+or calibration do not match this discretization procedure, and
+as such further analysis would be valuable to understand how
+well model accuracy aligns with it’s suitability as a hash func-
+tion.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+504

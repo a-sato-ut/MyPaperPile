@@ -1,0 +1,115 @@
+)BTI
+'VODUJPO,FZ.PEFM,FZ	B
+5SBEJUJPOBM)BTI.BQ 	C
+-FBSOFE)BTI.BQ
+Figure 7: Traditional Hash-map vs Learned Hash-map
+4.1 The Hash-Model Index
+Surprisingly,learningtheCDFofthekeydistributionisone
+potential way to learn a better hash function. However, in
+contrastto rangeindexes,we donotaimto storetherecords
+compactly or in strictly sorted order. Rather we can scale
+the CDF by the targeted size Mof the Hash-map and use
+h(K)=F(K)∗M,withkey Kasourhash-function.Ifthemodel
+FperfectlylearnedtheempiricalCDFofthekeys,noconflicts
+wouldexist.Furthermore,thehash-functionisorthogonalto
+theactualHash-maparchitectureandcanbecombinedwith
+separate chaining or any other Hash-map type.
+Forthemodel,wecanagainleveragetherecursivemodel
+architecture from the previous section. Obviously, like before,
+there exists a trade-off between the size of the index and per-
+formance, which is influenced by the model and dataset.
+Note, that how inserts, look-ups, and conflicts are handled
+is dependent on the Hash-map architecture. As a result, the
+benefits learned hash functions provide over traditional hash
+functions, which map keys to a uniformly distributed space
+depend on two key factors: (1) How accurately the model rep-
+resentstheobservedCDF.Forexample,ifthedataisgenerated
+byauniformdistribution,asimplelinearmodelwillbeable
+tolearnthegeneraldatadistribution,buttheresultinghash
+functionwillnotbebetterthananysufficientlyrandomized
+hashfunction.(2)Hashmaparchitecture:dependingonthe
+architecture, implementation details, the payload (i.e., value),
+theconflictresolutionpolicy,aswellashowmuchmoremem-
+ory(i.e.,slots)willorcanbeallocated,significantlyinfluences
+the performance. For example, for small keys and small or no
+values,traditionalhashfunctionswithCuckoohashingwill
+probably work well, whereas larger payloads or distributed
+hash maps might benefit more from avoiding conflicts, and
+thus from learned hash functions.
+4.2 Results
+We evaluated the conflict rate of learned hash functions over
+thethreeintegerdatasetsfromtheprevioussection.Asour
+modelhash-functionsweusedthe2-stageRMImodelsfrom
+theprevioussectionwith100kmodelsonthe2ndstageand
+withoutanyhiddenlayers.Asthebaselineweusedasimple
+MurmurHash3-likehash-functionandcomparedthenumber
+ofconflictsforatablewiththesamenumberofslotsasrecords.
+AscanbeseeninFigure8,thelearnedmodelscanreduce
+the number of conflicts by up to 77% over our datasets by
+learningtheempiricalCDFatareasonablecost;theexecution
+
+  
+
+
+
+  	
+ 		
+	
+
+  	 
+
+  
+ 	
+Figure 8: Reduction of Conflicts
+time is the same as the model execution time in Figure 4,
+around 25-40ns.
+Howbeneficialthereductionofconflictsisgiventhemodel
+execution time depends on the Hash-map architecture, pay-
+load,andmanyotherfactors.Forexample,ourexperiments
+(seeAppendixB)showthatforaseparatechainingHash-map
+architecturewith 20Byte recordslearned hashfunctions can
+reduce the wasted amount of storage by up to 80% at an in-
+creaseofonly13nsinlatencycomparedtorandomhashing.
+The reason why it only increases the latency by 13ns and not
+40ns is, that often fewer conflicts also yield to fewer cache
+misses,andthusbetterperformance.Ontheotherhand,for
+verysmallpayloadsCuckoo-hashingwithstandardhash-maps
+probablyremainsthebestchoice.H owever,asweshowinAp-
+pendixC,forlargerpayloadsachained-hashmapwithlearned
+hashfunctioncanbefasterthancuckoo-hashingand/ortra-
+ditional randomized hashing. Finally, we see the biggest po-
+tential for distributed settings. For example, NAM-DB [ 74]
+employs a hash function to look-up data on remote machines
+usingRDMA.Becauseoftheextremelyhighcostforeverycon-
+flict(i.e.,everyconflictrequiresanadditionalRDMArequest
+which is in the order of micro-seconds), the model execution
+time is negligible and even small reductions in the conflictrate can significantly improve the overall performance. To
+conclude, learned hash functions are independent of the used
+Hash-map architecture and depending on the Hash-map ar-
+chitecture their complexity may or may not pay off.
+5 EXISTENCE INDEX
+ThelastcommonindextypeofDBMSareexistenceindexes,
+mostimportantly Bloomfilters, aspaceefficient probabilistic
+datastructuretotestwhetheranelementisamemberofaset.
+They are commonly used to determine if a key exists on cold
+storage.Forexample,Bigtableusesthemtodetermineifakey
+is contained in an SSTable [23].
+Internally, Bloom filters use a bit array of size mandk
+hashfunctions,whicheachmapakeytooneofthe marray
+positions (see Figure9(a)). To add an element to the set, a key
+is fed to the khash-functions and the bits of the returned
+positions are set to 1. To test if a key is a member of the set,
+thekeyisagainfedintothe khashfunctionstoreceive karray
+positions. If any of the bits at those kpositions is 0, the key
+isnotamemberofaset.Inotherwords,aBloomfilterdoes
+guaranteethatthereexists nofalsenegatives,buthaspotential
+false positives.
+WhileBloomfiltersarehighlyspace-efficient,theycanstill
+occupy a significant amount of memory. For example for one
+billionrecordsroughly ≈1.76Gigabytesareneeded.ForaFPR
+of 0.01% we would require ≈2.23 Gigabytes. There have been
+severalattemptstoimprovetheefficiencyofBloomfilters[ 52],
+but the general observation remains.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+497

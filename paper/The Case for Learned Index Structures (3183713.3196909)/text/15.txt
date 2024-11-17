@@ -1,0 +1,104 @@
+itselfisneeded,whereasaB-Treerequires O(logn)operations
+to keep the B-Tree balance. A similar argument can also be
+madeforinsertsinthemiddle,however,thosemightrequire
+tomovedataorreservespacewithinthedata,sothatthenew
+items can be put into the right place.
+Obviously, this observation also raises several questions.
+First,thereseemstobeaninterestingtrade-offinthegener-
+alizabilityofthemodelandthe“lastmile”performance;the
+better the “last mile” prediction, arguably, the more the model
+is overfitting and less able to generalize to new data items.
+Second,whathappensifthedistributionchanges?Canit
+bedetected,andisitpossibletoprovidesimilarstrongguaran-
+teesas B-Treeswhich alwaysguarantee O(loдn)look-upand
+insertioncosts?Whileansweringthisquestiongoesbeyond
+the scope of this paper, we believe that it is possible for cer-
+tain models to achieve it. More importantly though, machine
+learning offers new ways to adapt the models to changes in
+the data distribution, such as online learning, which might be
+moreeffectivethantraditionalB-Treebalancingtechniques.
+Exploring them also remains future work.
+Finally, it should be pointed out that there always exists
+amuchsimpleralternativetohandlinginsertsbybuildinga
+delta-index[ 60].Allinsertsarekeptinbufferandfromtime
+to time merged with a potential retraining of the model. This
+approach is already widely used, for example in Bigtable [ 23]
+and many other systems, and was recently explored in [ 32]
+for learned indexes.
+D.2 Paging
+Throughoutthis section weassumed thatthe data,either the
+actual records or the <key,pointer> pairs, are stored in one
+continuousblock.However,especiallyforindexesoverdata
+stored on disk, it is quite common to partition the data into
+larger pages that are stored in separate regions on disk. To
+that end, our observation that a model learns the CDF no
+longer holds true as pos=Pr(X<Key)∗Nis violated. In the
+following we outline several options to overcome this issue:
+LeveragingtheRMIstructure:TheRMIstructurealready
+partitions the space into regions. With small modifications
+tothelearningprocess,wecanminimizehowmuchmodels
+overlap in the regions they cover. Furthermore, it might be
+possible to duplicate any records which might be accessed by
+more than one model.
+Another option is to have an additional translation table in
+the form of <first_key, disk-position> . With the trans-
+lationtabletherestoftheindexstructureremainsthesame.
+However, this idea will work best if the disk pages are very
+large.Atthesametimeitispossibletousethepredictedpo-
+sitionwiththemin-andmax-errortoreducethenumberof
+bytes which have to be read from a large page, so that the
+impact of the page size might be negligible.
+Withmorecomplexmodels,itmightactuallybepossible
+to learn the actual pointers of the pages. Especially if a file-
+systemisusedtodeterminethepageondiskwithasystematicnumberingoftheblocksondisk(e.g., block1,...,block100 )
+the learning process can remain the same.
+Obviously,moreinvestigationisrequiredtobetterunder-
+standtheimpactoflearnedindexesfordisk-basedsystems.At
+thesametimethesignificantspacesavings aswellasspeed
+benefits make it a very interesting avenue for future work.
+E FURTHER BLOOM FILTER RESULTS
+In Section 5.1.2, we propose an alternative approach to a
+learned Bloom filter where the classifier output is discretized
+and used as an additional hash function in the traditional
+Bloomfiltersetup.Preliminaryresultsdemonstratethatthis
+approachinsomecasesoutperformstheresultslistedinSec-
+tion5.2,butastheresultsdependonthediscretizationscheme,
+further analysis is worthwhile. We describe below these addi-
+tional experiments.
+Asbefore,weassumewehaveamodelmodel f(x)→[0,1]
+that maps keys to the range [0 ,1]. In this case, we allocate
+mbits for a bitmap Mwhere we set M[⌊mf(x)⌋] = 1 for
+all inserted keys x∈K. We can then observe the FPR by
+observingwhatpercentageofnon-keysinthevalidationset
+map to a location in the bitmap with a value of 1, i.e. FPRm≡/summationtext
+x∈˜UM[⌊f(x)m⌋]
+|˜U|. In addition, we have a traditional Bloom
+filter with false positive rate FPRB. We say that a query q
+is predicted to be a key if M[⌊f(q)m⌋] = 1 and the Bloom
+filter also returns that it is a key. As such, the overall FPR
+ofthesystemis FPRm×FPRB;wecandeterminethesizeof
+the traditional Bloom filter based on it’s false positive rate
+FPRB=p∗
+FPRmwherep∗is the desired FPR for the whole
+system.
+AsinSection5.2,wetestourlearnedBloomfilterondata
+fromGoogle’stransparencyreport.WeusethesamecharacterRNNtrainedwitha16-dimensionalwidthand32-dimensional
+characterembeddings.Scanningoverdifferentvaluesfor m,
+we can observe the total size of the model, bitmap for the
+learned Bloom filter, and the traditional Bloom filter. For a
+desired total FPR p∗=0.1%, we find that setting m= 1000000
+gives a total size of 2.21MB, a 27.4% reduction in memory,
+compared to the 15% reduction following the approach in
+Section 5.1.1 and reported in Section 5.2. For a desired total
+FPRp∗= 1% we get a total size of 1.19MB, a 41% reduction in
+memory,comparedtothe36%reductionreportedinSection
+5.2.
+These results are a significant improvement over those
+shown in Section 5.2. However, typical measures of accuracy
+or calibration do not match this discretization procedure, and
+as such further analysis would be valuable to understand how
+well model accuracy aligns with it’s suitability as a hash func-
+tion.
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+504

@@ -1,0 +1,104 @@
+The Case for Learned Index Structures
+Tim Kraska∗
+MIT
+kraska@mit.eduAlex Beutel
+Google, Inc.
+abeutel@google.comEd H. Chi
+Google, Inc.
+edchi@google.comJeffrey Dean
+Google, Inc.
+jeff@google.comNeoklis Polyzotis
+Google, Inc.
+npoly@google.com
+ABSTRACT
+Indexes are models: a B-Tree-Index can be seen as a model to
+mapakeytothe positionofarecordwithinasortedarray,a
+Hash-Index as a model to map a key to a position of a record
+withinanunsortedarray,andaBitMap-Indexasamodeltoin-
+dicateifadatarecordexistsornot.Inthisexploratoryresearch
+paper, we start from this premise and posit that all existing
+indexstructurescanbereplacedwithothertypesofmodels,in-
+cluding deep-learning models, which we term learned indexes.
+Wetheoreticallyanalyzeunderwhichconditionslearnedin-
+dexesoutperformtraditionalindexstructuresanddescribethe
+main challenges in designing learned index structures. Our
+initial results show that our learned indexes can have signifi-
+cant advantagesovertraditional indexes. Moreimportantly,
+webelievethattheideaofreplacingcorecomponentsofadata
+management system through learned models has far reaching
+implications for future systems designs and that this work
+provides just a glimpse of what might be possible.
+ACM Reference Format:
+TimKraska,AlexBeutel,EdH.Chi,JeffreyDean,andNeoklisPolyzotis.
+2018. The Case for Learned Index Structures. In SIGMOD’18: 2018
+International Conference on Management of Data, June 10–15, 2018,
+Houston, TX, USA. , 16 pages. https://doi.org/10.1145/3183713.3196909
+1 INTRODUCTION
+Whenever efficient data access is needed, index structures
+are the answer, and a wide variety of choices exist to address
+the different needs of various access patterns. For example,
+B-Treesarethebestchoiceforrangerequests(e.g.,retrieveall
+recordsinacertaintimeframe);Hash-mapsarehardtobeat
+in performance for single key look-ups; and Bloom filters are
+typicallyusedtocheckforrecordexistence.Becauseoftheir
+importancefordatabasesystemsandmanyotherapplications,
+indexes have been extensively tuned over the past decades to
+be more memory, cache and/or CPU efficient [11, 29, 36, 59].
+Yet, all of those indexes remain general purpose data struc-
+tures; they assume nothing about the data distribution and do
+nottakeadvantageofmorecommonpatternsprevalentinreal
+world data. For example, if the goal is to build a highly-tuned
+system to store and query ranges of fixed-length records over
+∗Work done while the author was affiliated with Google.
+SIGMOD’18, June 10–15, 2018, Houston, TX, USA
+© 2018 Copyright held by the owner/author(s).
+ACM ISBN 978-1-4503-4703-7/18/06.
+https://doi.org/10.1145/3183713.3196909asetofcontinuousintegerkeys(e.g.,thekeys1to100M),one
+wouldnotuseaconventionalB-Treeindexoverthekeyssince
+thekeyitselfcanbeusedasanoffset,makingitan O(1)rather
+thanO(logn)operationtolook-upanykeyorthebeginning
+of a range of keys. Similarly, the index memory size would be
+reduced from O(n)t oO(1). Maybe surprisingly, similar opti-
+mizations are possible for other data patterns. In other words,
+knowingtheexactdatadistributionenableshighlyoptimizing
+almost any index structure.
+Of course, in most real-world use cases the data do not
+perfectlyfollowaknownpatternandtheengineeringeffort
+to build specialized solutions for every use case is usually too
+high.However,wearguethatmachinelearning(ML)opens
+up the opportunity to learn a model that reflects the patterns
+in the data and thus to enable the automatic synthesis of spe-
+cializedindexstructures,termed learnedindexes ,withlow
+engineering cost.
+Inthispaper,weexploretheextenttowhichlearnedmodels,
+including neural networks, can be used to enhance, or evenreplace, traditional index structures from B-Trees to Bloomfilters. This may seem counterintuitive because ML cannotprovide the semantic guarantees we traditionally associate
+withtheseindexes,andbecausethemostpowerfulMLmodels,
+neural networks, are traditionally thought of as being very
+compute expensive. Yet, we argue that none of these apparent
+obstacles areas problematic asthey mightseem. Instead, our
+proposaltouselearnedmodelshasthepotentialforsignificant
+benefits, especially on the next generation of hardware.
+In terms of semantic guarantees, indexes are already to a
+large extent learned models making it surprisingly straight-
+forwardtoreplacethemwithothertypesofMLmodels.For
+example, a B-Tree can be considered as a model which takes a
+key as an input and predicts the position of a data record in a
+sortedset(thedatahastobesortedtoenableefficientrange
+requests). A Bloom filter is a binary classifier, which based on
+akeypredictsifakeyexistsinasetornot.Obviously,there
+exists subtle but important differences. For example, a Bloom
+filtercanhavefalsepositivesbutnotfalsenegatives.However,
+as we will show in this paper, it is possible to address these
+differencesthroughnovellearningtechniquesand/orsimple
+auxiliary data structures.
+In terms of performance, we observe that every CPU al-
+readyhaspowerfulSIMDcapabilitiesandwespeculatethat
+many laptops and mobile phones will soon have a Graphics
+ProcessingUnit(GPU)orTensorProcessing Unit(TPU).Itis
+also reasonable to speculate that CPU-SIMD/GPU/TPUs will
+be increasingly powerful as it is much easier to scale the re-
+strictedsetof(parallel)mathoperationsusedbyneuralnets
+than a general purpose instruction set. As a result the high
+Research 6: Storage & Indexing
+SIGMOD’18, June 10-15, 2018, Houston, TX, USA
+489
